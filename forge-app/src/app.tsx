@@ -17,7 +17,7 @@ const BRANCH_COLORS = [LIME, ORANGE, CYAN, PINK, PURPLE, "#00FFB2"];
 // ── STORAGE ───────────────────────────────────────────────
 const store = {
   async get(k) {
-    try { const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; } catch { return null; }
+    try { const r = await window.storage.get(k); if (!r?.value) return null; return JSON.parse(r.value); } catch { return null; }
   },
   async set(k, v) {
     try { await window.storage.set(k, JSON.stringify(v)); } catch {}
@@ -65,9 +65,9 @@ async function aiStream(system, user, onChunk, maxTok = 1400) {
       if (!raw || raw === "[DONE]") continue;
       try {
         const d = JSON.parse(raw);
-        const t = d?.choices?.[0]?.delta?.content || "";
-        if (t) { full += t; onChunk(full); }
-      } catch {}
+        const t = d?.choices?.[0]?.delta?.content;
+        if (t && typeof t === "string") { full += t; onChunk(full); }
+      } catch { /* ignore malformed chunks */ }
     }
   }
   return full;
