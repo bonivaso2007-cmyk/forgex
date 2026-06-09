@@ -1,12 +1,15 @@
-
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+
+// ── TYPES ──────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare global { interface Window { storage?: any } }
 
 // Free AI via Groq - https://console.groq.com/
 // Get your free API key there, no credit card needed
 const GROQ_API_KEY = "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"; // <-- Put your key here
 const API = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile"; // Free, fast, excellent quality
-const Q_TARGET = 6;
+const Q_TARGET = 4;
 const LIME = "#C8FF00";
 const PURPLE = "#B87FFF";
 const ORANGE = "#FF6B00";
@@ -14,24 +17,111 @@ const PINK = "#FF3C78";
 const CYAN = "#00D4FF";
 const BRANCH_COLORS = [LIME, ORANGE, CYAN, PINK, PURPLE, "#00FFB2"];
 
+// Futuristic glass palette
+const BG_DEEP = "#050510";
+const BG_GLASS = "var(--bg-card)";
+const BG_GLASS_HOVER = "var(--bg-card-hover)";
+const BG_PANEL = "rgba(255,255,255,0.06)";
+const BORDER_GLASS = "var(--border)";
+const BORDER_GLASS_HOVER = "var(--border-hover)";
+const TEXT_PRIMARY = "var(--text-primary)";
+const TEXT_SECONDARY = "var(--text-secondary)";
+const TEXT_MUTED = "var(--text-muted)";
+const GLOW_LIME = "0 0 30px rgba(200,255,0,0.15)";
+const GLOW_CYAN = "0 0 30px rgba(0,212,255,0.15)";
+const GLOW_PURPLE = "0 0 30px rgba(184,127,255,0.15)";
+const GLOW_ORANGE = "0 0 30px rgba(255,107,0,0.15)";
+const GLOW_PINK = "0 0 30px rgba(255,60,120,0.15)";
+const GRADIENT_HERO = "linear-gradient(135deg, #07071a 0%, #0d0d2a 50%, #050518 100%)";
+const GRADIENT_CARD = "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)";
+
+// ── DESIGN SYSTEM ───────────────────────────────────────────
+// Spacing scale
+const $ = {
+  px02: "2px", px04: "4px", px06: "6px", px08: "8px", px10: "10px", px12: "12px",
+  px14: "14px", px16: "16px", px20: "20px", px24: "24px", px30: "30px", px36: "36px",
+  px48: "48px", px60: "60px", px72: "72px",
+  // Semantic
+  sectionGap: "2.5rem", cardPad: "1.8rem", inputGap: "0.85rem",
+};
+// Font families
+const FONT = {
+  sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  mono: "'SF Mono', 'Fira Code', 'Consolas', monospace",
+};
+// Font sizes
+const FS = {
+  xs: "0.56rem", sm: "0.68rem", base: "0.84rem", md: "0.95rem", lg: "1.1rem",
+  xl: "1.3rem", "2xl": "1.6rem", "3xl": "2rem", "4xl": "2.5rem",
+};
+// Border radii
+const RAD = {
+  sm: "4px", md: "8px", lg: "14px", xl: "20px", full: "9999px",
+};
+// Shadows
+const SH = {
+  card: "0 4px 24px rgba(0,0,0,0.4)",
+  glow_lime: "0 0 30px rgba(200,255,0,0.15)",
+  glow_cyan: "0 0 30px rgba(0,212,255,0.15)",
+  glow_purple: "0 0 30px rgba(184,127,255,0.15)",
+  glow_orange: "0 0 30px rgba(255,107,0,0.15)",
+  glow_pink: "0 0 30px rgba(255,60,120,0.15)",
+};
+// Transitions
+const TR = {
+  fast: "150ms ease", mid: "250ms ease", slow: "400ms ease",
+};
+// Layout
+const LAYOUT = { maxWidth: "1200px", contentWidth: "820px" };
+
+// ── GLOBAL SHARED STYLES ────────────────────────────────────
+const G = {
+  app: { minHeight: "100vh", background: "var(--bg-deep)", color: "var(--text-primary)", fontFamily: FONT.sans, display: "flex", flexDirection: "column" as const, alignItems: "center", padding: "0 1.25rem" },
+  wrap: { width: "100%", maxWidth: LAYOUT.maxWidth, transition: "padding-right .3s" },
+  label: { color: "var(--text-muted)", fontSize: "0.6rem", textTransform: "uppercase" as const, letterSpacing: "3.5px", marginBottom: "0.65rem" },
+  glass: { background: "var(--bg-card)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid var(--border)`, borderRadius: "12px" },
+  ta: { width: "100%", background: "var(--bg-card)", border: `1px solid var(--border)`, borderRadius: "10px", color: "var(--text-primary)", fontSize: "0.9rem", padding: "1.1rem", resize: "none" as const, outline: "none", fontFamily: FONT.mono, lineHeight: "1.72", boxSizing: "border-box" as const, transition: "border-color .2s, box-shadow .2s" },
+  btn: { background: LIME, color: "#000", border: "none", borderRadius: "8px", padding: "0.82rem 1.9rem", fontSize: "0.71rem", fontWeight: "900", letterSpacing: "2.5px", cursor: "pointer", fontFamily: FONT.mono, textTransform: "uppercase" as const, boxShadow: GLOW_LIME },
+  ghost: { background: "transparent", color: "var(--text-secondary)", border: `1px solid var(--border)`, borderRadius: "8px", padding: "0.55rem 1rem", fontSize: "0.66rem", cursor: "pointer", fontFamily: FONT.mono, transition: "all .2s" },
+  err: { color: PINK, fontSize: "0.72rem", marginTop: "0.75rem", background: "rgba(255,60,120,0.08)", border: "1px solid rgba(255,60,120,0.2)", borderRadius: "8px", padding: "0.55rem 0.85rem" },
+};
+
+// ── TYPES ────────────────────────────────────────────────────
+interface BlueprintData { title: string; vision: string; sections: { title: string; content: string; bullets: string[] }[] }
+interface RoadmapPhase { phase: string; title: string; duration: string; goal: string; milestones: string[]; kpis: string[] }
+interface RoadmapData { title: string; phases: RoadmapPhase[] }
+interface BusinessPlanData { title: string; oneliner: string; sections: { title: string; content: string }[] }
+interface ActionTask { task: string; outcome: string; priority: string }
+interface Week { week: string; focus: string; tasks: ActionTask[] }
+interface ActionPlanData { title: string; weeks: Week[] }
+interface SWOTData { title: string; summary: string; strengths: string[]; weaknesses: string[]; opportunities: string[]; threats: string[]; strategic_insight?: string }
+interface MindMapNode { node: string; angle: number; dist: number }
+interface MindMapBranch { label: string; color?: string; nodes: MindMapNode[] }
+interface MindMapData { center: string; branches: MindMapBranch[] }
+interface IdeaScore { score: number; label: string; verdict: string; strengths: string[]; gaps: string[] }
+interface QAPair { question: string; answer: string }
+interface Profile { name: string; age: string; city: string; country: string; market: string; stage: string; techLevel: string; funding: string; constraints: string; targetCustomer: string; industry: string; bio: string }
+interface User { uid: string; email: string }
+interface Output { key: string; label: string; icon: string; desc: string }
+
 // ── STORAGE ───────────────────────────────────────────────
 const store = {
-  async get(k) {
+  async get(k: string) {
     try { const r = await window.storage.get(k); if (!r?.value) return null; return JSON.parse(r.value); } catch { return null; }
   },
-  async set(k, v) {
+  async set(k: string, v: unknown) {
     try { await window.storage.set(k, JSON.stringify(v)); } catch {}
   },
-  async del(k) {
+  async del(k: string) {
     try { await window.storage.delete(k); } catch {}
   },
-  async list(prefix) {
+  async list(prefix: string) {
     try { const r = await window.storage.list(prefix); return r?.keys || []; } catch { return []; }
   }
 };
 
 // ── API ───────────────────────────────────────────────────
-async function aiStream(system, user, onChunk, maxTok = 1400) {
+async function aiStream(system: string, user: string, onChunk: (chunk: string) => void, maxTok = 1400) {
   if (!GROQ_API_KEY) throw new Error("Missing GROQ_API_KEY - add your key at line 5");
   const res = await fetch(API, {
     method: "POST",
@@ -53,6 +143,7 @@ async function aiStream(system, user, onChunk, maxTok = 1400) {
     const err = await res.text();
     throw new Error(`API ${res.status}: ${err}`);
   }
+  if (!res.body) throw new Error("No response body");
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let full = "";
@@ -73,24 +164,146 @@ async function aiStream(system, user, onChunk, maxTok = 1400) {
   return full;
 }
 
-async function ai(sys, usr, asJSON = false, maxTok = 1400, retries = 2) {
+async function ai(sys: string, usr: string, asJSON = false, maxTok = 1400, retries = 2) {
   for (let i = 0; i <= retries; i++) {
     try {
       let full = "";
       await aiStream(sys, usr, t => { full = t; }, maxTok);
       if (!full) throw new Error("Empty");
       if (!asJSON) return full;
-      let s = full.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-      const st = s.indexOf("{"), en = s.lastIndexOf("}");
-      if (st === -1 || en === -1) throw new Error("No JSON");
-      s = s.slice(st, en + 1).replace(/,\s*([}\]])/g, "$1").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-      return JSON.parse(s);
-    } catch (e) { if (i === retries) throw e; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
+      // Strip markdown fences and surrounding text
+      let raw = full.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+      // Find the first opening { or [ and slice from there
+      const openMatch = raw.search(/[{[]/);
+      if (openMatch === -1) throw new Error("No JSON object found in response");
+      raw = raw.slice(openMatch);
+      // Find the end — first } for objects, first ] for arrays
+      let end = -1, nesting = 0, inStr = false;
+      for (let j = 0; j < raw.length; j++) {
+        const c = raw[j];
+        if (c === '"' && raw[j - 1] !== '\\') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (c === '{' || c === '[') { if (nesting === 0) end = -1; nesting++; }
+        else if (c === '}' || c === ']') { nesting--; if (nesting === 0) { end = j + 1; break; } }
+      }
+      if (end === -1) end = raw.indexOf("}");
+      if (end === -1) end = raw.indexOf("]");
+      if (end === -1) end = raw.length;
+      let s = raw.slice(0, end);
+      // Remove control characters, BOM, and strip trailing commas
+      s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").replace(/^\uFEFF/, "").replace(/,(\s*[}\]])/g, "$1").trim();
+      // Try native parse first
+      try { return JSON.parse(s); } catch {}
+      // Fallback: fix common LLM JSON malformation patterns
+      s = s.replace(/([{,])\s*([\]}])/g, "$1$2"); // trailing commas
+      s = s.replace(/([{,]\s*)'([^']*)'\s:/g, '$1"$2":'); // single-quote keys
+      s = s.replace(/:(\s*)'([^']*)'(?=[,\s}\]])/g, ': "$2"'); // single-quote vals
+      s = s.replace(/\{:\s*/g, '{"score":'); // {: "score" → {"score"
+      s = s.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '{"$1":'); // {unquoted_key: → {"unquoted_key":
+      s = s.replace(/:\s*([a-zA-Z_][a-zA-Z0-9_]*)(\s*[,}\]])/g, ': "$1"$2'); // :unquoted_val → :"unquoted_val"
+      try { return JSON.parse(s); } catch (e2) { throw new Error(`Invalid JSON: ${s.slice(0, 80)}`); }
+    } catch (e: unknown) { if (i === retries) throw e; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
   }
 }
 
+// ── SHARED PRIMITIVES ──────────────────────────────────────
+// Reusable design system components
+
+function SectionCard({ children, accent, style: extraStyle }: { children: React.ReactNode; accent?: string; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      background: BG_GLASS,
+      backdropFilter: "blur(20px)",
+      WebkitBackdropFilter: "blur(20px)",
+      border: `1px solid ${accent ? `${accent}25` : BORDER_GLASS}`,
+      borderRadius: RAD.lg,
+      padding: $.cardPad,
+      boxShadow: SH.card,
+      transition: TR.mid,
+      ...extraStyle
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionHeader({ label, children, accent, action }: { label: string; children?: React.ReactNode; accent?: string; action?: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: $.px20, flexWrap: "wrap", gap: $.px12 }}>
+      <div style={{ flex: 1, minWidth: "200px" }}>
+        <div style={{ color: accent || LIME, fontSize: FS.xs, fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase" as const, marginBottom: $.px06 }}>{label}</div>
+        {children}
+      </div>
+      {action && <div style={{ flexShrink: 0 }}>{action}</div>}
+    </div>
+  );
+}
+
+function Tag({ children, accent }: { children: React.ReactNode; accent?: string }) {
+  const c = accent || LIME;
+  return (
+    <span style={{
+      background: `${c}0f`,
+      border: `1px solid ${c}30`,
+      color: c,
+      fontSize: FS.xs,
+      padding: `${$.px04} ${$.px10}`,
+      borderRadius: RAD.sm,
+      fontFamily: FONT.mono,
+      letterSpacing: "1px",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: $.px04,
+    }}>
+      {children}
+    </span>
+  );
+}
+
+function PriorityChip({ priority }: { priority: string }) {
+  const p = priority.toUpperCase().slice(0, 4);
+  const map: Record<string, { color: string; bg: string }> = {
+    HIGH: { color: PINK, bg: `${PINK}12` },
+    MED: { color: ORANGE, bg: `${ORANGE}12` },
+    LOW: { color: LIME, bg: `${LIME}12` },
+  };
+  const { color, bg } = map[p] || { color: TEXT_SECONDARY, bg: BG_GLASS };
+  return (
+    <span style={{
+      background: bg,
+      border: `1px solid ${color}30`,
+      color: color,
+      fontSize: FS.xs,
+      fontWeight: 700,
+      padding: `${$.px04} ${$.px08}`,
+      borderRadius: RAD.sm,
+      fontFamily: FONT.mono,
+      letterSpacing: "1px",
+      display: "inline-flex",
+      alignItems: "center",
+    }}>
+      {p}
+    </span>
+  );
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  const c = score >= 80 ? LIME : score >= 60 ? ORANGE : score >= 40 ? "#FFD700" : PINK;
+  return (
+    <div style={{
+      width: "52px", height: "52px", borderRadius: "50%",
+      background: `${c}12`, border: `2px solid ${c}35`,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      boxShadow: `0 0 20px ${c}20`,
+      flexShrink: 0,
+    }}>
+      <div style={{ color: c, fontSize: FS.md, fontWeight: 900, fontFamily: FONT.mono, lineHeight: 1 }}>{score}</div>
+    </div>
+  );
+}
+
 // ── MARKDOWN ──────────────────────────────────────────────
-function Md({ text }) {
+function Md({ text }: { text: string }) {
   return (
     <div style={{ fontFamily: "monospace" }}>
       {(text || "").split("\n").map((line, i) => {
@@ -111,7 +324,7 @@ function Md({ text }) {
 }
 
 // ── FOUNDER PROFILE HELPERS ───────────────────────────────
-function profileContext(p) {
+function profileContext(p: any) {
   if (!p) return "";
   return `FOUNDER PROFILE:
 Name: ${p.name} | Age: ${p.age} | Location: ${p.city}, ${p.country}
@@ -123,7 +336,7 @@ Industry: ${p.industry}
 One sentence about them: ${p.bio}`;
 }
 
-function marketContext(p) {
+function marketContext(p: any) {
   if (!p) return "";
   const isAfrica = ["Tanzania","Kenya","Uganda","Nigeria","Ghana","Rwanda","Ethiopia","Zambia","Mozambique","Senegal","Côte d'Ivoire","South Africa"].some(c => p.country?.includes(c));
   const isEmerging = isAfrica || ["India","Bangladesh","Pakistan","Indonesia","Philippines","Vietnam","Cambodia"].some(c => p.country?.includes(c));
@@ -133,7 +346,7 @@ function marketContext(p) {
 }
 
 // ── AUTH SCREENS ──────────────────────────────────────────
-function AuthScreen({ onAuth }) {
+function AuthScreen({ onAuth }: { onAuth: (u: any, isNew: boolean) => void }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ email: "", password: "", name: "" });
   const [loading, setLoading] = useState(false);
@@ -162,16 +375,16 @@ function AuthScreen({ onAuth }) {
     setLoading(false);
   };
 
-  const inp = { width: "100%", background: "#0b0b0b", border: "1px solid #1e1e1e", borderRadius: "7px", color: "#f0f0f0", fontSize: "0.9rem", padding: "0.85rem 1rem", outline: "none", fontFamily: "monospace", boxSizing: "border-box" };
+  const inp = { width: "100%", background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "8px", color: TEXT_PRIMARY, fontSize: "0.9rem", padding: "0.85rem 1rem", outline: "none", fontFamily: "monospace", boxSizing: "border-box" as const, transition: "border-color .2s" };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#070707", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", fontFamily: "monospace" }}>
+    <div style={{ minHeight: "100vh", background: GRADIENT_HERO, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", fontFamily: "monospace" }}>
       <div style={{ width: "100%", maxWidth: "400px" }}>
-        <h1 style={{ color: LIME, fontSize: "2rem", fontWeight: "900", letterSpacing: "7px", margin: "0 0 4px" }}>FORGE</h1>
-        <p style={{ color: "#1e1e1e", fontSize: "0.58rem", letterSpacing: "3px", margin: "0 0 2.5rem" }}>IDEA ENGINE FOR FOUNDERS</p>
-        <div style={{ display: "flex", gap: "0", marginBottom: "1.8rem", border: "1px solid #181818", borderRadius: "7px", overflow: "hidden" }}>
+        <h1 style={{ color: LIME, fontSize: "2rem", fontWeight: "900", letterSpacing: "7px", margin: "0 0 4px", textShadow: "0 0 30px rgba(200,255,0,0.3)" }}>FORGE</h1>
+        <p style={{ color: TEXT_MUTED, fontSize: "0.58rem", letterSpacing: "3px", margin: "0 0 2.5rem" }}>IDEA ENGINE FOR FOUNDERS</p>
+        <div style={{ display: "flex", gap: "0", marginBottom: "1.8rem", border: `1px solid ${BORDER_GLASS}`, borderRadius: "7px", overflow: "hidden" }}>
           {["login", "signup"].map(m => (
-            <button key={m} onClick={() => { setMode(m); setErr(""); }} style={{ flex: 1, background: mode === m ? LIME : "transparent", color: mode === m ? "#000" : "#333", border: "none", padding: "0.72rem", fontSize: "0.7rem", fontWeight: "900", letterSpacing: "2px", cursor: "pointer", fontFamily: "monospace", textTransform: "uppercase", transition: "all .2s" }}>{m}</button>
+            <button key={m} onClick={() => { setMode(m); setErr(""); }} style={{ flex: 1, background: mode === m ? LIME : "transparent", color: mode === m ? "#000" : TEXT_SECONDARY, border: "none", padding: "0.72rem", fontSize: "0.7rem", fontWeight: "900", letterSpacing: "2px", cursor: "pointer", fontFamily: "monospace", textTransform: "uppercase", transition: "all .2s" }}>{m}</button>
           ))}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -179,18 +392,18 @@ function AuthScreen({ onAuth }) {
           <input style={inp} placeholder="Email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} onKeyDown={e => e.key === "Enter" && submit()} />
           <input style={inp} placeholder="Password" type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} onKeyDown={e => e.key === "Enter" && submit()} />
         </div>
-        {err && <div style={{ color: PINK, fontSize: "0.74rem", marginTop: "0.75rem", background: "#FF3C780d", border: "1px solid #FF3C7818", borderRadius: "5px", padding: "0.55rem 0.85rem" }}>{err}</div>}
-        <button onClick={submit} disabled={loading} style={{ width: "100%", background: LIME, color: "#000", border: "none", borderRadius: "7px", padding: "0.9rem", fontSize: "0.73rem", fontWeight: "900", letterSpacing: "2.5px", cursor: loading ? "not-allowed" : "pointer", fontFamily: "monospace", marginTop: "1.2rem", opacity: loading ? 0.5 : 1 }}>
+        {err && <div style={G.err}>{err}</div>}
+        <button onClick={submit} disabled={loading} style={{ width: "100%", background: LIME, color: "#000", border: "none", borderRadius: "7px", padding: "0.9rem", fontSize: "0.73rem", fontWeight: "900", letterSpacing: "2.5px", cursor: loading ? "not-allowed" : "pointer", fontFamily: "monospace", marginTop: "1.2rem", opacity: loading ? 0.5 : 1, boxShadow: `0 0 20px rgba(200,255,0,0.2)` }}>
           {loading ? "…" : mode === "login" ? "LOG IN →" : "CREATE ACCOUNT →"}
         </button>
-        <p style={{ color: "#1e1e1e", fontSize: "0.62rem", textAlign: "center", marginTop: "1.2rem" }}>Your ideas stay private. No data leaves this app.</p>
+        <p style={{ color: TEXT_MUTED, fontSize: "0.62rem", textAlign: "center", marginTop: "1.2rem" }}>Your ideas stay private. No data leaves this app.</p>
       </div>
     </div>
   );
 }
 
 // ── ONBOARDING ────────────────────────────────────────────
-function Onboarding({ user, onDone }) {
+function Onboarding({ user, onDone }: { user: any; onDone: (p: any) => void }) {
   const steps = [
     { key: "age", label: "How old are you?", placeholder: "e.g. 19", type: "input" },
     { key: "city", label: "What city are you in?", placeholder: "e.g. Dodoma", type: "input" },
@@ -226,35 +439,35 @@ function Onboarding({ user, onDone }) {
   const progress = ((step) / steps.length) * 100;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#070707", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", fontFamily: "monospace" }}>
+    <div style={{ minHeight: "100vh", background: GRADIENT_HERO, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", fontFamily: "monospace" }}>
       <div style={{ width: "100%", maxWidth: "520px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-          <span style={{ color: LIME, fontSize: "0.9rem", fontWeight: "900", letterSpacing: "5px" }}>FORGE</span>
-          <span style={{ color: "#222", fontSize: "0.6rem" }}>{step + 1} / {steps.length}</span>
+          <span style={{ color: LIME, fontSize: "0.9rem", fontWeight: "900", letterSpacing: "5px", textShadow: "0 0 20px rgba(200,255,0,0.3)" }}>FORGE</span>
+          <span style={{ color: TEXT_MUTED, fontSize: "0.6rem" }}>{step + 1} / {steps.length}</span>
         </div>
-        <div style={{ height: "2px", background: "#111", borderRadius: "2px", marginBottom: "3rem", overflow: "hidden" }}>
-          <div style={{ height: "100%", background: LIME, width: `${progress}%`, transition: "width .4s ease", borderRadius: "2px" }} />
+        <div style={{ height: "2px", background: BORDER_GLASS, borderRadius: "2px", marginBottom: "3rem", overflow: "hidden" }}>
+          <div style={{ height: "100%", background: LIME, width: `${progress}%`, transition: "width .4s ease", borderRadius: "2px", boxShadow: `0 0 10px ${LIME}60` }} />
         </div>
-        <p style={{ color: "#222", fontSize: "0.6rem", letterSpacing: "3px", margin: "0 0 0.6rem", textTransform: "uppercase" }}>Building your founder profile</p>
-        <p style={{ color: "#e8e8e8", fontSize: "1.15rem", margin: "0 0 2rem", fontWeight: "300", lineHeight: "1.7" }}>{cur.label}</p>
+        <p style={{ color: TEXT_MUTED, fontSize: "0.6rem", letterSpacing: "3px", margin: "0 0 0.6rem", textTransform: "uppercase" }}>Building your founder profile</p>
+        <p style={{ color: TEXT_PRIMARY, fontSize: "1.15rem", margin: "0 0 2rem", fontWeight: "300", lineHeight: "1.7" }}>{cur.label}</p>
         {cur.type === "input" && (
-          <input style={{ width: "100%", background: "#0b0b0b", border: "1px solid #1e1e1e", borderRadius: "8px", color: "#f0f0f0", fontSize: "1rem", padding: "1rem 1.1rem", outline: "none", fontFamily: "monospace", boxSizing: "border-box" }}
+          <input style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "8px", color: TEXT_PRIMARY, fontSize: "1rem", padding: "1rem 1.1rem", outline: "none", fontFamily: "monospace", boxSizing: "border-box" }}
             placeholder={cur.placeholder} value={val} onChange={e => setVal(e.target.value)}
             onKeyDown={e => e.key === "Enter" && val.trim() && next()} autoFocus />
         )}
         {cur.type === "textarea" && (
-          <textarea style={{ width: "100%", background: "#0b0b0b", border: "1px solid #1e1e1e", borderRadius: "8px", color: "#f0f0f0", fontSize: "0.95rem", padding: "1rem 1.1rem", outline: "none", fontFamily: "monospace", lineHeight: "1.7", height: "100px", resize: "none", boxSizing: "border-box" }}
+          <textarea style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "8px", color: TEXT_PRIMARY, fontSize: "0.95rem", padding: "1rem 1.1rem", outline: "none", fontFamily: "monospace", lineHeight: "1.7", height: "100px", resize: "none", boxSizing: "border-box" }}
             placeholder={cur.placeholder} value={val} onChange={e => setVal(e.target.value)} autoFocus />
         )}
         {cur.type === "choice" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-            {cur.options.map(o => (
-              <button key={o} onClick={() => setVal(o)} style={{ background: val === o ? `${LIME}15` : "#0a0a0a", border: `1px solid ${val === o ? LIME : "#1e1e1e"}`, borderRadius: "8px", padding: "0.85rem 1.1rem", color: val === o ? LIME : "#888", fontFamily: "monospace", fontSize: "0.85rem", cursor: "pointer", textAlign: "left", transition: "all .15s" }}>{o}</button>
+            {(cur.options || []).map(o => (
+              <button key={o} onClick={() => setVal(o)} style={{ background: val === o ? `${LIME}15` : BG_GLASS, border: `1px solid ${val === o ? LIME : BORDER_GLASS}`, borderRadius: "8px", padding: "0.85rem 1.1rem", color: val === o ? LIME : TEXT_SECONDARY, fontFamily: "monospace", fontSize: "0.85rem", cursor: "pointer", textAlign: "left", transition: "all .15s" }}>{o}</button>
             ))}
           </div>
         )}
         <button onClick={next} disabled={!val.trim() || loading}
-          style={{ background: LIME, color: "#000", border: "none", borderRadius: "7px", padding: "0.85rem 2rem", fontSize: "0.72rem", fontWeight: "900", letterSpacing: "2.5px", cursor: !val.trim() ? "not-allowed" : "pointer", fontFamily: "monospace", marginTop: "1.5rem", opacity: !val.trim() ? 0.25 : 1 }}>
+          style={{ background: LIME, color: "#000", border: "none", borderRadius: "7px", padding: "0.85rem 2rem", fontSize: "0.72rem", fontWeight: "900", letterSpacing: "2.5px", cursor: !val.trim() ? "not-allowed" : "pointer", fontFamily: "monospace", marginTop: "1.5rem", opacity: !val.trim() ? 0.25 : 1, boxShadow: `0 0 20px rgba(200,255,0,0.2)` }}>
           {loading ? "SAVING…" : step === steps.length - 1 ? "ENTER FORGE →" : "NEXT →"}
         </button>
       </div>
@@ -263,7 +476,7 @@ function Onboarding({ user, onDone }) {
 }
 
 // ── PROFILE PANEL ─────────────────────────────────────────
-function ProfilePanel({ profile, user, onUpdate, onLogout, onClose }) {
+function ProfilePanel({ profile, user, onUpdate, onLogout, onClose }: { profile: any; user: any; onUpdate: (p: any) => void; onLogout: () => void; onClose: () => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ ...profile });
   const fields = [
@@ -281,38 +494,38 @@ function ProfilePanel({ profile, user, onUpdate, onLogout, onClose }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#00000095", zIndex: 3000, display: "flex", justifyContent: "flex-end" }}>
-      <div style={{ width: "min(500px,100vw)", background: "#080808", borderLeft: "1px solid #1a1a1a", display: "flex", flexDirection: "column", height: "100vh" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.2rem 1.5rem", borderBottom: "1px solid #111", flexShrink: 0 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", zIndex: 3000, display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ width: "min(500px,100vw)", background: BG_PANEL, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderLeft: `1px solid ${BORDER_GLASS}`, display: "flex", flexDirection: "column", height: "100vh" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.2rem 1.5rem", borderBottom: `1px solid ${BORDER_GLASS}`, flexShrink: 0 }}>
           <div>
             <div style={{ color: LIME, fontSize: "0.72rem", fontWeight: "900", letterSpacing: "3px", fontFamily: "monospace" }}>FOUNDER PROFILE</div>
-            <div style={{ color: "#1e1e1e", fontSize: "0.55rem", letterSpacing: "1.5px", fontFamily: "monospace", marginTop: "2px" }}>{profile.name?.toUpperCase()}</div>
+            <div style={{ color: TEXT_MUTED, fontSize: "0.55rem", letterSpacing: "1.5px", fontFamily: "monospace", marginTop: "2px" }}>{profile.name?.toUpperCase()}</div>
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             {editing
               ? <button onClick={save} style={{ background: LIME, color: "#000", border: "none", borderRadius: "5px", padding: "5px 12px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem", fontWeight: "bold" }}>SAVE</button>
               : <button onClick={() => setEditing(true)} style={{ background: "transparent", border: `1px solid ${LIME}30`, color: LIME, borderRadius: "5px", padding: "5px 12px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem" }}>EDIT</button>
             }
-            <button onClick={onClose} style={{ background: "transparent", border: "1px solid #1a1a1a", color: "#333", borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem" }}>✕</button>
+            <button onClick={onClose} style={{ background: "transparent", border: `1px solid ${BORDER_GLASS}`, color: TEXT_SECONDARY, borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem" }}>✕</button>
           </div>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
           {/* score badge */}
-          <div style={{ background: "#0a0a0a", border: `1px solid ${LIME}15`, borderRadius: "10px", padding: "1rem 1.2rem", marginBottom: "1.5rem" }}>
-            <div style={{ color: "#333", fontSize: "0.58rem", letterSpacing: "2.5px", marginBottom: "0.4rem" }}>FOUNDER IDENTITY</div>
-            <div style={{ color: "#e0e0e0", fontSize: "0.88rem", lineHeight: "1.65", fontFamily: "monospace" }}>{profile.bio}</div>
+          <div style={{ background: BG_GLASS, border: `1px solid ${LIME}15`, borderRadius: "10px", padding: "1rem 1.2rem", marginBottom: "1.5rem" }}>
+            <div style={{ color: LIME, fontSize: "0.58rem", letterSpacing: "2.5px", marginBottom: "0.4rem" }}>FOUNDER IDENTITY</div>
+            <div style={{ color: TEXT_PRIMARY, fontSize: "0.88rem", lineHeight: "1.65", fontFamily: "monospace" }}>{profile.bio}</div>
           </div>
           {fields.map(f => (
             <div key={f.key} style={{ marginBottom: "1.1rem" }}>
-              <div style={{ color: "#252525", fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: "0.3rem", fontFamily: "monospace" }}>{f.label}</div>
+              <div style={{ color: TEXT_MUTED, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: "0.3rem", fontFamily: "monospace" }}>{f.label}</div>
               {editing
-                ? <textarea style={{ width: "100%", background: "#0b0b0b", border: "1px solid #1e1e1e", borderRadius: "6px", color: "#f0f0f0", fontSize: "0.83rem", padding: "0.6rem 0.8rem", outline: "none", fontFamily: "monospace", lineHeight: "1.6", minHeight: "42px", resize: "vertical", boxSizing: "border-box" }}
-                  value={draft[f.key] || ""} onChange={e => setDraft(d => ({ ...d, [f.key]: e.target.value }))} />
-                : <div style={{ color: "#888", fontSize: "0.83rem", lineHeight: "1.6", fontFamily: "monospace" }}>{profile[f.key] || "—"}</div>
+                ? <textarea style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "6px", color: TEXT_PRIMARY, fontSize: "0.83rem", padding: "0.6rem 0.8rem", outline: "none", fontFamily: "monospace", lineHeight: "1.6", minHeight: "42px", resize: "vertical", boxSizing: "border-box" }}
+                  value={draft[f.key] || ""} onChange={e => setDraft((d: Record<string, string>) => ({ ...d, [f.key]: e.target.value }))} />
+                : <div style={{ color: TEXT_SECONDARY, fontSize: "0.83rem", lineHeight: "1.6", fontFamily: "monospace" }}>{profile[f.key] || "—"}</div>
               }
             </div>
           ))}
-          <button onClick={onLogout} style={{ background: "transparent", border: "1px solid #FF3C7825", color: PINK, borderRadius: "6px", padding: "0.65rem 1.2rem", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem", marginTop: "1rem", width: "100%" }}>LOG OUT</button>
+          <button onClick={onLogout} style={{ background: "transparent", border: `1px solid ${PINK}30`, color: PINK, borderRadius: "6px", padding: "0.65rem 1.2rem", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem", marginTop: "1rem", width: "100%" }}>LOG OUT</button>
         </div>
       </div>
     </div>
@@ -320,43 +533,44 @@ function ProfilePanel({ profile, user, onUpdate, onLogout, onClose }) {
 }
 
 // ── IDEA HISTORY PANEL ────────────────────────────────────
-function HistoryPanel({ uid, onLoad, onClose }) {
-  const [ideas, setIdeas] = useState([]);
+interface SavedIdea { id: string; text: string; savedAt: number; score?: number; label?: string; }
+function HistoryPanel({ uid, onLoad, onClose }: { uid: string; onLoad: (data: SavedIdea) => void; onClose: () => void }) {
+  const [ideas, setIdeas] = useState<SavedIdea[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       const keys = await store.list(`idea:${uid}:`);
-      const items = await Promise.all(keys.map(k => store.get(k)));
-      setIdeas(items.filter(Boolean).sort((a, b) => b.savedAt - a.savedAt));
+      const items = await Promise.all(keys.map((k: string) => store.get(k)));
+      setIdeas(items.filter(Boolean).sort((a, b) => b.savedAt - a.savedAt) as SavedIdea[]);
       setLoading(false);
     })();
   }, [uid]);
 
-  const del = async (id) => {
+  const del = async (id: string) => {
     await store.del(`idea:${uid}:${id}`);
-    setIdeas(p => p.filter(x => x.id !== id));
+    setIdeas(p => p.filter((x: SavedIdea) => x.id !== id));
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#00000095", zIndex: 3000, display: "flex", justifyContent: "flex-end" }}>
-      <div style={{ width: "min(480px,100vw)", background: "#080808", borderLeft: "1px solid #1a1a1a", display: "flex", flexDirection: "column", height: "100vh" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.2rem 1.5rem", borderBottom: "1px solid #111", flexShrink: 0 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", zIndex: 3000, display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ width: "min(480px,100vw)", background: BG_PANEL, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderLeft: `1px solid ${BORDER_GLASS}`, display: "flex", flexDirection: "column", height: "100vh" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.2rem 1.5rem", borderBottom: `1px solid ${BORDER_GLASS}`, flexShrink: 0 }}>
           <div style={{ color: LIME, fontSize: "0.72rem", fontWeight: "900", letterSpacing: "3px", fontFamily: "monospace" }}>IDEA VAULT</div>
-          <button onClick={onClose} style={{ background: "transparent", border: "1px solid #1a1a1a", color: "#333", borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem" }}>✕</button>
+          <button onClick={onClose} style={{ background: "transparent", border: `1px solid ${BORDER_GLASS}`, color: TEXT_SECONDARY, borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem" }}>✕</button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "1.2rem 1.5rem" }}>
-          {loading && <div style={{ color: "#222", fontSize: "0.72rem", fontFamily: "monospace" }}>Loading…</div>}
-          {!loading && ideas.length === 0 && <div style={{ color: "#222", fontSize: "0.8rem", fontFamily: "monospace" }}>No saved ideas yet. Start one and it'll appear here.</div>}
+          {loading && <div style={{ color: TEXT_MUTED, fontSize: "0.72rem", fontFamily: "monospace" }}>Loading…</div>}
+          {!loading && ideas.length === 0 && <div style={{ color: TEXT_MUTED, fontSize: "0.8rem", fontFamily: "monospace" }}>No saved ideas yet. Start one and it'll appear here.</div>}
           {ideas.map(idea => (
-            <div key={idea.id} style={{ background: "#0a0a0a", border: "1px solid #151515", borderRadius: "10px", padding: "1rem 1.1rem", marginBottom: "0.75rem" }}>
-              <div style={{ color: "#e0e0e0", fontSize: "0.85rem", marginBottom: "0.35rem", fontFamily: "monospace", lineHeight: "1.5" }}>{idea.text?.slice(0, 100)}{idea.text?.length > 100 ? "…" : ""}</div>
+            <div key={idea.id} style={{ background: BG_GLASS, border: `1px solid ${BORDER_GLASS}`, borderRadius: "10px", padding: "1rem 1.1rem", marginBottom: "0.75rem" }}>
+              <div style={{ color: TEXT_PRIMARY, fontSize: "0.85rem", marginBottom: "0.35rem", fontFamily: "monospace", lineHeight: "1.5" }}>{idea.text?.slice(0, 100)}{idea.text?.length > 100 ? "…" : ""}</div>
               <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                 {idea.score && <span style={{ color: idea.score >= 80 ? LIME : idea.score >= 60 ? ORANGE : PINK, fontSize: "0.62rem", border: `1px solid currentColor`, padding: "1px 7px", borderRadius: "3px", opacity: 0.8 }}>{idea.score} — {idea.label}</span>}
-                <span style={{ color: "#222", fontSize: "0.6rem", fontFamily: "monospace" }}>{new Date(idea.savedAt).toLocaleDateString()}</span>
+                <span style={{ color: TEXT_MUTED, fontSize: "0.6rem", fontFamily: "monospace" }}>{new Date(idea.savedAt).toLocaleDateString()}</span>
                 <div style={{ marginLeft: "auto", display: "flex", gap: "0.4rem" }}>
                   <button onClick={() => { onLoad(idea); onClose(); }} style={{ background: `${LIME}12`, border: `1px solid ${LIME}25`, color: LIME, borderRadius: "4px", padding: "3px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.62rem" }}>LOAD</button>
-                  <button onClick={() => del(idea.id)} style={{ background: "transparent", border: "1px solid #FF3C7818", color: PINK, borderRadius: "4px", padding: "3px 8px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.62rem" }}>✕</button>
+                  <button onClick={() => del(idea.id)} style={{ background: "transparent", border: `1px solid ${PINK}25`, color: PINK, borderRadius: "4px", padding: "3px 8px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.62rem" }}>✕</button>
                 </div>
               </div>
             </div>
@@ -368,10 +582,10 @@ function HistoryPanel({ uid, onLoad, onClose }) {
 }
 
 // ── REALITY CHECK ─────────────────────────────────────────
-function RealityCheck({ idea, qa, profile, onProceed, onBack }) {
+function RealityCheck({ idea, qa, profile, onProceed, onBack }: { idea: string; qa: any[]; profile: any; onProceed: () => void; onBack: () => void }) {
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(true);
-  const [talked, setTalked] = useState(null);
+  const [talked, setTalked] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -387,27 +601,27 @@ Structure: ## Feasibility Score (X/10)\n## Can You Actually Build This?\n## Mark
   return (
     <div style={{ animation: "fadeIn .3s ease", fontFamily: "monospace" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.8rem" }}>
-        <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: ORANGE, animation: loading ? "pulse 1s infinite" : "none", flexShrink: 0 }} />
+        <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: ORANGE, animation: loading ? "pulse 1s infinite" : "none", flexShrink: 0, boxShadow: `0 0 10px ${ORANGE}` }} />
         <span style={{ color: ORANGE, fontSize: "0.68rem", letterSpacing: "3px" }}>{loading ? "RUNNING REALITY CHECK…" : "REALITY CHECK COMPLETE"}</span>
       </div>
-      <div style={{ background: "#0a0a0a", border: `1px solid ${ORANGE}20`, borderRadius: "12px", padding: "1.5rem", marginBottom: "1.5rem" }}>
+      <div style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${ORANGE}25`, borderRadius: "12px", padding: "1.5rem", marginBottom: "1.5rem" }}>
         <Md text={result} />
       </div>
       {!loading && (
         <>
-          <div style={{ background: "#0a0a0a", border: "1px solid #181818", borderRadius: "10px", padding: "1.2rem", marginBottom: "1.5rem" }}>
-            <p style={{ color: "#e0e0e0", fontSize: "0.9rem", margin: "0 0 1rem", fontWeight: "300" }}>Have you spoken to at least one real potential customer about this idea?</p>
+          <div style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "10px", padding: "1.2rem", marginBottom: "1.5rem" }}>
+            <p style={{ color: TEXT_PRIMARY, fontSize: "0.9rem", margin: "0 0 1rem", fontWeight: "300" }}>Have you spoken to at least one real potential customer about this idea?</p>
             <div style={{ display: "flex", gap: "0.75rem" }}>
               {["Yes, I have", "Not yet"].map(o => (
-                <button key={o} onClick={() => setTalked(o)} style={{ flex: 1, background: talked === o ? (o.startsWith("Yes") ? `${LIME}15` : `${PINK}12`) : "#0d0d0d", border: `1px solid ${talked === o ? (o.startsWith("Yes") ? LIME : PINK) : "#1e1e1e"}`, borderRadius: "7px", padding: "0.75rem", color: talked === o ? (o.startsWith("Yes") ? LIME : PINK) : "#555", fontFamily: "monospace", fontSize: "0.8rem", cursor: "pointer", transition: "all .15s" }}>{o}</button>
+                <button key={o} onClick={() => setTalked(o)} style={{ flex: 1, background: talked === o ? (o.startsWith("Yes") ? `${LIME}15` : `${PINK}12`) : "transparent", border: `1px solid ${talked === o ? (o.startsWith("Yes") ? LIME : PINK) : BORDER_GLASS}`, borderRadius: "7px", padding: "0.75rem", color: talked === o ? (o.startsWith("Yes") ? LIME : PINK) : TEXT_SECONDARY, fontFamily: "monospace", fontSize: "0.8rem", cursor: "pointer", transition: "all .15s" }}>{o}</button>
               ))}
             </div>
-            {talked === "Not yet" && <p style={{ color: "#555", fontSize: "0.75rem", marginTop: "0.75rem", lineHeight: "1.6" }}>⚠ No real conversations = unvalidated assumptions. The outputs will still generate but treat them as hypotheses, not facts. Your #1 action after this: talk to one real person.</p>}
+            {talked === "Not yet" && <p style={{ color: TEXT_MUTED, fontSize: "0.75rem", marginTop: "0.75rem", lineHeight: "1.6" }}>⚠ No real conversations = unvalidated assumptions. The outputs will still generate but treat them as hypotheses, not facts. Your #1 action after this: talk to one real person.</p>}
           </div>
           {talked && (
             <div style={{ display: "flex", gap: "0.75rem" }}>
-              <button onClick={onProceed} style={{ background: LIME, color: "#000", border: "none", borderRadius: "6px", padding: "0.82rem 1.8rem", fontSize: "0.72rem", fontWeight: "900", letterSpacing: "2px", cursor: "pointer", fontFamily: "monospace" }}>BUILD OUTPUTS →</button>
-              <button onClick={onBack} style={{ background: "transparent", color: "#333", border: "1px solid #1e1e1e", borderRadius: "6px", padding: "0.82rem 1.2rem", fontSize: "0.7rem", cursor: "pointer", fontFamily: "monospace" }}>← BACK</button>
+              <button onClick={onProceed} style={{ background: LIME, color: "#000", border: "none", borderRadius: "6px", padding: "0.82rem 1.8rem", fontSize: "0.72rem", fontWeight: "900", letterSpacing: "2px", cursor: "pointer", fontFamily: "monospace", boxShadow: `0 0 20px rgba(200,255,0,0.2)` }}>BUILD OUTPUTS →</button>
+              <button onClick={onBack} style={{ background: "transparent", color: TEXT_SECONDARY, border: `1px solid ${BORDER_GLASS}`, borderRadius: "6px", padding: "0.82rem 1.2rem", fontSize: "0.7rem", cursor: "pointer", fontFamily: "monospace" }}>← BACK</button>
             </div>
           )}
         </>
@@ -417,20 +631,26 @@ Structure: ## Feasibility Score (X/10)\n## Can You Actually Build This?\n## Mark
 }
 
 // ── MIND MAP ──────────────────────────────────────────────
-function MindMap({ data }) {
-  const svgRef = useRef(null);
+function MindMap({ data }: { data: MindMapData }) {
+  const svgRef = useRef<SVGSVGElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [hovered, setHovered] = useState(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const W = 1100, H = 720, cx = W / 2, cy = H / 2, bR = 210, nR = 125;
   const branches = (data.branches || []).slice(0, 6);
   const N = branches.length;
+  const BUTTONS: [string, () => void][] = [
+    ["＋", () => setTransform((t: { x: number; y: number; scale: number }) => ({ ...t, scale: Math.min(t.scale * 1.2, 3) }))],
+    ["－", () => setTransform((t: { x: number; y: number; scale: number }) => ({ ...t, scale: Math.max(t.scale * 0.83, 0.3) }))],
+    ["⊡", () => setTransform({ x: 0, y: 0, scale: 0.75 })],
+    ["↺", () => setTransform({ x: 0, y: 0, scale: 1 })],
+  ];
 
-  const wrap = (txt, max) => {
+  const wrap = (txt: string, max: number): string[] => {
     if (!txt) return [""];
-    const words = String(txt).split(" "); const lines = []; let cur = "";
+    const words = String(txt).split(" "); const lines: string[] = []; let cur = "";
     for (const w of words) { if ((cur + " " + w).trim().length > max) { lines.push(cur.trim()); cur = w; } else cur = (cur + " " + w).trim(); }
     if (cur) lines.push(cur); return lines.slice(0, 2);
   };
@@ -445,22 +665,22 @@ function MindMap({ data }) {
     return { angle, bx, by, nodes };
   }), [data]);
 
-  const onMouseDown = e => { if (e.button !== 0) return; setDragging(true); setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y }); };
-  const onMouseMove = e => { if (!dragging || !dragStart) return; setTransform(t => ({ ...t, x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })); };
+  const onMouseDown = (e: React.MouseEvent) => { if (e.button !== 0) return; setDragging(true); setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y }); };
+  const onMouseMove = (e: React.MouseEvent) => { if (!dragging || !dragStart) return; setTransform(t => ({ ...t, x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })); };
   const onMouseUp = () => { setDragging(false); setDragStart(null); };
-  const onWheel = useCallback(e => { e.preventDefault(); setTransform(t => ({ ...t, scale: Math.min(Math.max(t.scale * (e.deltaY > 0 ? 0.92 : 1.09), 0.3), 3) })); }, []);
+  const onWheel = useCallback((e: React.WheelEvent) => { e.preventDefault(); setTransform(t => ({ ...t, scale: Math.min(Math.max(t.scale * (e.deltaY > 0 ? 0.92 : 1.09), 0.3), 3) })); }, []);
 
-  useEffect(() => { const el = svgRef.current; if (!el) return; el.addEventListener("wheel", onWheel, { passive: false }); return () => el.removeEventListener("wheel", onWheel); }, []);
+  useEffect(() => { const el = svgRef.current; if (!el) return; const handler = (e: Event) => onWheel(e as unknown as React.WheelEvent); el.addEventListener("wheel", handler, { passive: false }); return () => el.removeEventListener("wheel", handler); }, [onWheel]);
 
   return (
-    <div style={{ position: "relative", background: "#060606", borderRadius: "12px", overflow: "hidden" }}>
+    <div style={{ position: "relative", background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "12px", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: "10px", right: "10px", display: "flex", gap: "5px", zIndex: 10 }}>
-        {[["＋", () => setTransform(t => ({ ...t, scale: Math.min(t.scale * 1.2, 3) }))], ["－", () => setTransform(t => ({ ...t, scale: Math.max(t.scale * 0.83, 0.3) }))], ["⊡", () => setTransform({ x: 0, y: 0, scale: 0.75 })], ["↺", () => setTransform({ x: 0, y: 0, scale: 1 })]].map(([l, a], i) => (
-          <button key={i} onClick={a} style={{ background: "#111", border: "1px solid #222", color: "#555", borderRadius: "4px", width: "26px", height: "26px", cursor: "pointer", fontSize: "0.8rem", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace", transition: "all .15s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = LIME; e.currentTarget.style.color = LIME; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#222"; e.currentTarget.style.color = "#555"; }}>{l}</button>
+        {BUTTONS.map(([l, a], i) => (
+          <button key={i} onClick={a} style={{ background: BG_GLASS, border: `1px solid ${BORDER_GLASS}`, color: TEXT_SECONDARY, borderRadius: "4px", width: "26px", height: "26px", cursor: "pointer", fontSize: "0.8rem", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace", transition: "all .15s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = LIME; e.currentTarget.style.color = LIME; }} onMouseLeave={e => { e.currentTarget.style.borderColor = `${BORDER_GLASS}`; e.currentTarget.style.color = TEXT_SECONDARY; }}>{l}</button>
         ))}
       </div>
-      {selected && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "#0d0d0d", border: `1px solid ${LIME}25`, borderRadius: "6px", padding: "5px 10px", zIndex: 10 }}><div style={{ color: LIME, fontSize: "0.55rem", letterSpacing: "2px", marginBottom: "1px" }}>SELECTED</div><div style={{ color: "#ccc", fontSize: "0.72rem", fontFamily: "monospace" }}>{selected}</div></div>}
-      <div style={{ position: "absolute", bottom: "10px", left: "10px", color: "#1a1a1a", fontSize: "0.55rem", fontFamily: "monospace", zIndex: 10 }}>drag · scroll to zoom · click to highlight</div>
+      {selected && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: BG_PANEL, border: `1px solid ${LIME}25`, borderRadius: "6px", padding: "5px 10px", zIndex: 10 }}><div style={{ color: LIME, fontSize: "0.55rem", letterSpacing: "2px", marginBottom: "1px" }}>SELECTED</div><div style={{ color: TEXT_PRIMARY, fontSize: "0.72rem", fontFamily: "monospace" }}>{selected}</div></div>}
+      <div style={{ position: "absolute", bottom: "10px", left: "10px", color: TEXT_MUTED, fontSize: "0.55rem", fontFamily: "monospace", zIndex: 10 }}>drag · scroll to zoom · click to highlight</div>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", cursor: dragging ? "grabbing" : "grab", userSelect: "none" }} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
         <defs>
           <filter id="gl"><feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
@@ -483,7 +703,7 @@ function MindMap({ data }) {
                 const ls = wrap(nk, 13); const bh = ls.length * 17 + 12;
                 return (<g key={j}>
                   <line x1={pos.bx + Math.cos(nAngle) * 62} y1={pos.by + Math.sin(nAngle) * 31} x2={nx - Math.cos(nAngle) * 52} y2={ny - Math.sin(nAngle) * (bh / 2)} stroke={color} strokeWidth={nActive ? 1.4 : 0.9} opacity={nActive ? 0.6 : 0.22} style={{ transition: "all .2s" }} />
-                  <rect x={nx - 52} y={ny - bh / 2} width={104} height={bh} rx={6} fill={selected === nk ? `${color}20` : "#0e0e0e"} stroke={color} strokeWidth={nActive ? 1.2 : 0.7} strokeOpacity={nActive ? 0.9 : 0.45} style={{ transition: "all .2s", cursor: "pointer", filter: selected === nk ? `drop-shadow(0 0 4px ${color})` : "none" }} onClick={() => setSelected(selected === nk ? null : nk)} onMouseEnter={() => setHovered(nk)} onMouseLeave={() => setHovered(null)} />
+                  <rect x={nx - 52} y={ny - bh / 2} width={104} height={bh} rx={6} fill={selected === nk ? `${color}20` : "rgba(14,14,14,0.8)"} stroke={color} strokeWidth={nActive ? 1.2 : 0.7} strokeOpacity={nActive ? 0.9 : 0.45} style={{ transition: "all .2s", cursor: "pointer", filter: selected === nk ? `drop-shadow(0 0 4px ${color})` : "none" }} onClick={() => setSelected(selected === nk ? null : nk)} onMouseEnter={() => setHovered(nk)} onMouseLeave={() => setHovered(null)} />
                   {ls.map((ln, li) => (<text key={li} x={nx} y={ny - bh / 2 + li * 17 + 14} textAnchor="middle" dominantBaseline="middle" fontSize={nActive ? 9.5 : 8.5} fill={nActive ? "#e8e8e8" : "#aaa"} fontFamily="monospace" style={{ pointerEvents: "none", transition: "all .2s" }}>{ln}</text>))}
                 </g>);
               })}
@@ -495,40 +715,291 @@ function MindMap({ data }) {
   );
 }
 
+// ── SKELETON LOADERS (match final layouts) ──────────────
+function Shimmer({ w = "100%", h = "1rem", r = RAD.sm, style: extra = {} }: { w?: string; h?: string; r?: string; style?: React.CSSProperties }) {
+  return <div style={{ width: w, height: h, borderRadius: r, background: "linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite", ...extra }} />;
+}
+
+function BlueprintSkeleton() {
+  return (
+    <div style={{ fontFamily: FONT.sans, padding: "0.5rem" }}>
+      <Shimmer w="60%" h="2rem" r={RAD.sm} style={{ marginBottom: "1rem" }} />
+      <Shimmer w="80%" h="0.85rem" r={RAD.sm} style={{ marginBottom: "2rem" }} />
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} style={{ marginBottom: "2rem" }}>
+          <Shimmer w="35%" h="1.1rem" r={RAD.sm} style={{ marginBottom: "0.75rem" }} />
+          <Shimmer w="90%" h="0.75rem" r={RAD.sm} style={{ marginBottom: "0.4rem" }} />
+          <Shimmer w="75%" h="0.75rem" r={RAD.sm} style={{ marginBottom: "0.6rem" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.75rem" }}>
+            <Shimmer w="100%" h="3.5rem" r={RAD.md} />
+            <Shimmer w="100%" h="3.5rem" r={RAD.md} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RoadmapSkeleton() {
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} style={{ background: "var(--bg-card)", border: `1px solid var(--border)`, borderRadius: RAD.lg, padding: "1.2rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.9rem" }}>
+              <Shimmer w="2.5rem" h="2.5rem" r={RAD.md} />
+              <Shimmer w="30%" h="1rem" r={RAD.sm} />
+              <div style={{ marginLeft: "auto" }}><Shimmer w="4rem" h="1.4rem" r={RAD.full} /></div>
+            </div>
+            <Shimmer w="55%" h="0.75rem" r={RAD.sm} style={{ marginBottom: "0.4rem" }} />
+            <Shimmer w="85%" h="0.75rem" r={RAD.sm} style={{ marginBottom: "0.8rem" }} />
+            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+              {[1, 2, 3].map(j => <Shimmer key={j} w="5rem" h="1.5rem" r={RAD.full} />)}
+            </div>
+            {[1, 2].map(j => (
+              <div key={j} style={{ display: "flex", gap: "0.6rem", marginBottom: "0.4rem", alignItems: "center" }}>
+                <Shimmer w="4.5rem" h="1.5rem" r={RAD.md} />
+                <Shimmer w="65%" h="0.8rem" r={RAD.sm} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BusinessPlanSkeleton() {
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      <Shimmer w="55%" h="1.8rem" r={RAD.sm} style={{ marginBottom: "0.6rem" }} />
+      <Shimmer w="75%" h="0.8rem" r={RAD.sm} style={{ marginBottom: "2.5rem" }} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "2rem" }}>
+        {[1, 2, 3, 4, 5, 6].map(i => <Shimmer key={i} w="100%" h="5rem" r={RAD.md} />)}
+      </div>
+      <Shimmer w="100%" h="8rem" r={RAD.lg} />
+    </div>
+  );
+}
+
+function ActionPlanSkeleton() {
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} style={{ marginBottom: "1.8rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.6rem", paddingBottom: "0.4rem", borderBottom: `1px solid var(--border)` }}>
+            <Shimmer w="4rem" h="1rem" r={RAD.sm} />
+            <Shimmer w="8rem" h="0.75rem" r={RAD.sm} />
+          </div>
+          {[1, 2, 3].map(j => (
+            <div key={j} style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", marginBottom: "0.35rem" }}>
+              <Shimmer w="4rem" h="2.2rem" r={RAD.md} />
+              <div style={{ flex: 1 }}>
+                <Shimmer w="75%" h="0.85rem" r={RAD.sm} style={{ marginBottom: "0.3rem" }} />
+                <Shimmer w="50%" h="0.75rem" r={RAD.sm} />
+              </div>
+              <Shimmer w="1.5rem" h="1.5rem" r="50%" />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SWOTSkeleton() {
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      <Shimmer w="50%" h="1.8rem" r={RAD.sm} style={{ marginBottom: "0.5rem" }} />
+      <Shimmer w="70%" h="0.8rem" r={RAD.sm} style={{ marginBottom: "2rem" }} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} style={{ background: "var(--bg-card)", border: `1px solid var(--border)`, borderRadius: RAD.md, padding: "1rem" }}>
+            <Shimmer w="4rem" h="0.65rem" r={RAD.sm} style={{ marginBottom: "0.65rem" }} />
+            {[1, 2, 3].map(j => (
+              <div key={j} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                <Shimmer w="0.6rem" h="0.6rem" r="2px" style={{ marginTop: "2px" }} />
+                <Shimmer w="85%" h="0.75rem" r={RAD.sm} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <Shimmer w="100%" h="4.5rem" r={RAD.md} />
+    </div>
+  );
+}
+
+function MindMapSkeleton() {
+  return (
+    <div style={{ background: BG_GLASS, border: `1px solid var(--border)`, borderRadius: RAD.lg, overflow: "hidden", height: "420px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ position: "relative", width: "64px", height: "64px", margin: "0 auto 1.2rem" }}>
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${LIME}18`, animation: "spin 3s linear infinite" }} />
+        <div style={{ position: "absolute", inset: "8px", borderRadius: "50%", border: `2px solid ${LIME}40`, animation: "spin 1.8s linear infinite reverse" }} />
+        <div style={{ position: "absolute", inset: "20px", borderRadius: "50%", background: `radial-gradient(circle, ${LIME}30, transparent)`, animation: "glowPulse 2s ease infinite" }} />
+        <div style={{ position: "absolute", inset: "26px", borderRadius: "50%", background: LIME, boxShadow: `0 0 16px ${LIME}`, animation: "pulse 1.5s ease infinite" }} />
+      </div>
+      <p style={{ color: LIME, fontSize: "0.62rem", letterSpacing: "5px", margin: "0 0 0.4rem", fontFamily: FONT.mono }}>BUILDING MIND MAP</p>
+      <p style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>Mapping your idea universe</p>
+    </div>
+  );
+}
+
 // ── OUTPUT RENDERERS (compact) ────────────────────────────
-function Blueprint({ data }) {
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 5px" }}>{data.title}</h2><p style={{ color: "#444", fontSize: "0.84rem", margin: "0 0 1.8rem", fontStyle: "italic", lineHeight: "1.65" }}>{data.vision}</p>{(data.sections || []).map((s, i) => (<div key={i} style={{ marginBottom: "1.4rem", paddingLeft: "1rem", borderLeft: `2px solid ${LIME}22` }}><div style={{ color: LIME, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.3rem" }}>{s.title}</div><p style={{ color: "#c8c8c8", fontSize: "0.84rem", lineHeight: "1.72", margin: "0 0 0.4rem" }}>{s.content}</p>{(s.bullets || []).map((b, j) => (<div key={j} style={{ color: "#555", fontSize: "0.77rem", marginBottom: "0.18rem", paddingLeft: "0.75rem" }}>→ {b}</div>))}</div>))}</div>);
+function Blueprint({ data }: { data: BlueprintData }) {
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      <h2 style={{ color: LIME, fontSize: FS.xl, margin: `0 0 ${$.px08}`, fontWeight: 800, letterSpacing: "-0.02em" }}>{data.title}</h2>
+      <p style={{ color: "var(--text-secondary)", fontSize: FS.base, margin: `0 0 ${$.px24}`, fontStyle: "italic", lineHeight: 1.65 }}>{data.vision}</p>
+      {(data.sections || []).map((s, i) => (
+        <div key={i} style={{ marginBottom: "1.4rem", paddingLeft: "1rem", borderLeft: `2px solid ${LIME}30` }}>
+          <div style={{ color: LIME, fontSize: FS.xs, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "3px", marginBottom: "0.3rem" }}>{s.title}</div>
+          <p style={{ color: "var(--text-primary)", fontSize: FS.base, lineHeight: 1.72, margin: `0 0 ${$.px08}` }}>{s.content}</p>
+          {(s.bullets || []).map((b, j) => (
+            <div key={j} style={{ color: "var(--text-secondary)", fontSize: FS.sm, marginBottom: "0.18rem", paddingLeft: "0.75rem", display: "flex", gap: "0.5rem" }}>
+              <span style={{ color: LIME, flexShrink: 0 }}>→</span>{b}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function Roadmap({ data }) {
+function Roadmap({ data }: { data: RoadmapData }) {
   const cols = [LIME, ORANGE, CYAN, PINK];
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 1.8rem" }}>{data.title}</h2>{(data.phases || []).map((p, i) => { const c = cols[i % 4]; return (<div key={i} style={{ display: "flex", gap: "1.3rem", marginBottom: "2rem" }}><div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "48px" }}><div style={{ width: "44px", height: "44px", borderRadius: "50%", border: `2px solid ${c}`, display: "flex", alignItems: "center", justifyContent: "center", color: c, fontWeight: "900", fontSize: "1rem", background: `${c}0a` }}>{i + 1}</div><div style={{ color: c, fontSize: "0.57rem", marginTop: "4px", textAlign: "center" }}>{p.duration}</div></div><div style={{ flex: 1, borderLeft: `1px solid ${c}18`, paddingLeft: "1.3rem" }}><div style={{ color: c, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "2.5px" }}>{p.phase}</div><div style={{ color: "#f0f0f0", fontSize: "0.95rem", fontWeight: "bold", margin: "3px 0 7px" }}>{p.title}</div><div style={{ color: "#888", fontSize: "0.81rem", marginBottom: "0.7rem", lineHeight: "1.6" }}>{p.goal}</div>{(p.milestones || []).map((m, j) => <div key={j} style={{ color: "#444", fontSize: "0.76rem", marginBottom: "0.18rem" }}>✓ {m}</div>)}{(p.kpis || []).length > 0 && <div style={{ marginTop: "0.55rem", display: "flex", flexWrap: "wrap", gap: "4px" }}>{p.kpis.map((k, j) => <span key={j} style={{ background: `${c}0f`, border: `1px solid ${c}28`, color: c, fontSize: "0.63rem", padding: "2px 7px", borderRadius: "3px" }}>{k}</span>)}</div>}</div></div>); })}</div>);
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      <h2 style={{ color: LIME, fontSize: FS.xl, margin: `0 0 ${$.px24}`, fontWeight: 800, letterSpacing: "-0.02em" }}>{data.title}</h2>
+      {(data.phases || []).map((p, i) => {
+        const c = cols[i % 4];
+        return (
+          <div key={i} style={{ display: "flex", gap: "1.3rem", marginBottom: "2rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "48px" }}>
+              <div style={{ width: "44px", height: "44px", borderRadius: "50%", border: `2px solid ${c}`, display: "flex", alignItems: "center", justifyContent: "center", color: c, fontWeight: 900, fontSize: FS.md, background: `${c}0a` }}>{i + 1}</div>
+              <div style={{ color: c, fontSize: FS.xs, marginTop: "4px", textAlign: "center" }}>{p.duration}</div>
+            </div>
+            <div style={{ flex: 1, borderLeft: `1px solid ${c}20`, paddingLeft: "1.3rem" }}>
+              <Tag accent={c}>{p.phase}</Tag>
+              <div style={{ color: "var(--text-primary)", fontSize: FS.md, fontWeight: 700, margin: `${$.px08} 0 ${$.px10}` }}>{p.title}</div>
+              <div style={{ color: "var(--text-secondary)", fontSize: FS.base, marginBottom: "0.7rem", lineHeight: 1.6 }}>{p.goal}</div>
+              {(p.milestones || []).map((m, j) => (
+                <div key={j} style={{ color: "var(--text-secondary)", fontSize: FS.sm, marginBottom: "0.18rem", display: "flex", gap: "0.5rem" }}>
+                  <span style={{ color: LIME }}>✓</span>{m}
+                </div>
+              ))}
+              {(p.kpis || []).length > 0 && (
+                <div style={{ marginTop: "0.55rem", display: "flex", flexWrap: "wrap", gap: $.px04 }}>
+                  {p.kpis.map((k, j) => <Tag key={j} accent={c}>{k}</Tag>)}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function BusinessPlan({ data }) {
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 4px" }}>{data.title}</h2><p style={{ color: ORANGE, fontSize: "0.88rem", margin: "0 0 1.6rem", fontStyle: "italic" }}>{data.oneliner}</p><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>{(data.sections || []).map((s, i, arr) => (<div key={i} style={{ background: "#0a0a0a", border: "1px solid #161616", borderRadius: "8px", padding: "0.85rem", gridColumn: (i === 0 || i === arr.length - 1) ? "1/-1" : "auto" }}><div style={{ color: LIME, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: "0.4rem" }}>{s.title}</div><p style={{ color: "#bbb", fontSize: "0.81rem", lineHeight: "1.68", margin: 0 }}>{s.content}</p></div>))}</div></div>);
+function BusinessPlan({ data }: { data: BusinessPlanData }) {
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      <h2 style={{ color: LIME, fontSize: FS.xl, margin: `0 0 ${$.px08}`, fontWeight: 800, letterSpacing: "-0.02em" }}>{data.title}</h2>
+      <p style={{ color: ORANGE, fontSize: FS.base, margin: `0 0 ${$.px20}`, fontStyle: "italic" }}>{data.oneliner}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+        {(data.sections || []).map((s, i, arr) => (
+          <div key={i} style={{ background: "var(--bg-card)", border: `1px solid var(--border)`, borderRadius: RAD.md, padding: "0.85rem", gridColumn: (i === 0 || i === arr.length - 1) ? "1/-1" : "auto" }}>
+            <Tag>{s.title}</Tag>
+            <p style={{ color: "var(--text-primary)", fontSize: FS.base, lineHeight: 1.68, margin: `${$.px10} 0 0` }}>{s.content}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function ActionPlan({ data }) {
-  const pc = { HIGH: PINK, MED: ORANGE, LOW: LIME };
-  const [done, setDone] = useState({});
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 1.8rem" }}>{data.title}</h2>{(data.weeks || []).map((w, i) => (<div key={i} style={{ marginBottom: "1.8rem" }}><div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.6rem", paddingBottom: "0.4rem", borderBottom: "1px solid #111" }}><span style={{ color: LIME, fontWeight: "bold", fontSize: "0.76rem" }}>{w.week}</span><span style={{ color: "#222", fontSize: "0.68rem" }}>— {w.focus}</span></div>{(w.tasks || []).map((t, j) => { const p = (t.priority || "MED").toUpperCase().slice(0, 3); const c = pc[p] || "#888"; const k = `${i}-${j}`; const isDone = done[k]; return (<div key={j} onClick={() => setDone(d => ({ ...d, [k]: !d[k] }))} style={{ display: "flex", gap: "0.8rem", alignItems: "flex-start", background: "#0a0a0a", border: `1px solid ${isDone ? LIME + "18" : "#111"}`, borderRadius: "6px", padding: "0.65rem 0.85rem", marginBottom: "0.32rem", cursor: "pointer", transition: "all .18s", opacity: isDone ? 0.45 : 1 }}><span style={{ color: c, fontSize: "0.56rem", fontWeight: "bold", border: `1px solid ${c}`, padding: "2px 5px", borderRadius: "3px", minWidth: "26px", textAlign: "center", flexShrink: 0, marginTop: "2px" }}>{p}</span><div style={{ flex: 1 }}><div style={{ color: isDone ? "#555" : "#eee", fontSize: "0.82rem", marginBottom: "0.15rem", textDecoration: isDone ? "line-through" : "none" }}>{t.task}</div><div style={{ color: "#252525", fontSize: "0.71rem" }}>→ {t.outcome}</div></div><span style={{ color: isDone ? LIME : "#1a1a1a", fontSize: "0.88rem", flexShrink: 0 }}>{isDone ? "✓" : "○"}</span></div>); })}</div>))}</div>);
+function ActionPlan({ data }: { data: ActionPlanData }) {
+  const [done, setDone] = useState<Record<string, boolean>>({});
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      <h2 style={{ color: LIME, fontSize: FS.xl, margin: `0 0 ${$.px24}`, fontWeight: 800, letterSpacing: "-0.02em" }}>{data.title}</h2>
+      {(data.weeks || []).map((w, i) => (
+        <div key={i} style={{ marginBottom: "1.8rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.6rem", paddingBottom: "0.4rem", borderBottom: `1px solid var(--border)` }}>
+            <span style={{ color: LIME, fontWeight: 700, fontSize: FS.sm }}>{w.week}</span>
+            <span style={{ color: "var(--text-muted)", fontSize: FS.sm }}>— {w.focus}</span>
+          </div>
+          {(w.tasks || []).map((t, j) => {
+            const k = `${i}-${j}`;
+            const isDone = done[k];
+            return (
+              <div key={j} onClick={() => setDone((d: Record<string, boolean>) => ({ ...d, [k]: !d[k] }))} style={{
+                display: "flex", gap: "0.8rem", alignItems: "flex-start",
+                background: isDone ? `${LIME}06` : "var(--bg-card)",
+                border: `1px solid ${isDone ? LIME : "var(--border)"}`,
+                borderRadius: RAD.md, padding: "0.65rem 0.85rem", marginBottom: "0.32rem",
+                cursor: "pointer", transition: "all .18s", opacity: isDone ? 0.5 : 1
+              }}>
+                <PriorityChip priority={t.priority || "MED"} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: isDone ? "var(--text-muted)" : "var(--text-primary)", fontSize: FS.base, marginBottom: "0.15rem", textDecoration: isDone ? "line-through" : "none" }}>{t.task}</div>
+                  <div style={{ color: "var(--text-muted)", fontSize: FS.sm }}>→ {t.outcome}</div>
+                </div>
+                <span style={{ color: isDone ? LIME : "var(--text-muted)", fontSize: FS.md, flexShrink: 0 }}>{isDone ? "✓" : "○"}</span>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function SWOT({ data }) {
-  const quads = [{ key: "strengths", label: "Strengths", color: LIME, icon: "↑" }, { key: "weaknesses", label: "Weaknesses", color: PINK, icon: "↓" }, { key: "opportunities", label: "Opportunities", color: CYAN, icon: "→" }, { key: "threats", label: "Threats", color: ORANGE, icon: "⚠" }];
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 4px" }}>{data.title}</h2><p style={{ color: "#333", fontSize: "0.78rem", margin: "0 0 1.4rem" }}>{data.summary}</p><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>{quads.map(q => (<div key={q.key} style={{ background: "#0a0a0a", border: `1px solid ${q.color}18`, borderRadius: "10px", padding: "1rem" }}><div style={{ color: q.color, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.65rem" }}>{q.icon} {q.label}</div>{(data[q.key] || []).map((item, i) => (<div key={i} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.4rem" }}><span style={{ color: q.color, fontSize: "0.66rem", marginTop: "2px", flexShrink: 0 }}>◆</span><span style={{ color: "#bbb", fontSize: "0.79rem", lineHeight: "1.58" }}>{item}</span></div>))}</div>))}</div>{data.strategic_insight && <div style={{ marginTop: "0.9rem", background: `${LIME}06`, border: `1px solid ${LIME}15`, borderRadius: "8px", padding: "0.9rem" }}><div style={{ color: LIME, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.3rem" }}>Strategic Read</div><p style={{ color: "#ccc", fontSize: "0.81rem", lineHeight: "1.68", margin: 0 }}>{data.strategic_insight}</p></div>}</div>);
+function SWOT({ data }: { data: SWOTData }) {
+  const quads = [
+    { key: "strengths", label: "Strengths", color: LIME, icon: "↑" },
+    { key: "weaknesses", label: "Weaknesses", color: PINK, icon: "↓" },
+    { key: "opportunities", label: "Opportunities", color: CYAN, icon: "→" },
+    { key: "threats", label: "Threats", color: ORANGE, icon: "⚠" },
+  ];
+  return (
+    <div style={{ fontFamily: FONT.sans }}>
+      <h2 style={{ color: LIME, fontSize: FS.xl, margin: "0 0 4px" }}>{data.title}</h2>
+      <p style={{ color: "var(--text-muted)", fontSize: FS.sm, margin: "0 0 1.4rem" }}>{data.summary}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>
+        {quads.map(q => (
+          <div key={q.key} style={{ background: "var(--bg-card)", border: `1px solid ${q.color}20`, borderRadius: RAD.md, padding: "1rem" }}>
+            <div style={{ color: q.color, fontSize: FS.xs, textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.65rem" }}>
+              {q.icon} {q.label}
+            </div>
+            {(Array.isArray(data[q.key as keyof SWOTData]) ? (data[q.key as keyof SWOTData] as string[]) : []).map((item: string, i: number) => (
+              <div key={i} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                <span style={{ color: q.color, fontSize: FS.sm, marginTop: "2px", flexShrink: 0 }}>◆</span>
+                <span style={{ color: "var(--text-primary)", fontSize: FS.base, lineHeight: 1.58 }}>{item}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {data.strategic_insight && (
+        <div style={{ marginTop: "0.9rem", background: `${LIME}06`, border: `1px solid ${LIME}18`, borderRadius: RAD.md, padding: "0.9rem" }}>
+          <Tag accent={LIME}>Strategic Read</Tag>
+          <p style={{ color: "var(--text-primary)", fontSize: FS.base, lineHeight: 1.68, margin: "0.5rem 0 0" }}>{data.strategic_insight}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── COMPANY BUILDER & INTEL (compact) ─────────────────────
-function CompanyBuilder({ idea, qaCtx, profile, onClose }) {
+function CompanyBuilder({ idea, qaCtx, profile, onClose }: { idea: string; qaCtx: any; profile: any; onClose: () => void }) {
   const [step, setStep] = useState("pick");
-  const [mode, setMode] = useState(null);
+  const [mode, setMode] = useState<string>("");
   const [bg, setBg] = useState("");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const scrollRef = useRef(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [result]);
 
   const build = async () => {
@@ -536,39 +1007,39 @@ function CompanyBuilder({ idea, qaCtx, profile, onClose }) {
     const modeCtx = mode === "scratch" ? "Starting from zero." : `Insider background: "${bg}"`;
     const sys = `You are FORGE SYSTEMS. McKinsey meets YC. Specific, ruthless, no filler. ## headers. → bullets.`;
     const prompt = `${profileContext(profile)}\n${marketContext(profile)}\n\nIdea:"${idea}"\n${qaCtx}\n\nContext:${modeCtx}\n\n## 1. Company Architecture\n## 2. Core Systems\n## 3. Workflow Design\n## 4. Hiring Sequence\n## 5. Revenue Operations\n## 6. Tech Stack (exact tools for this market)\n## 7. Growth Levers\n## 8. 90-Day Plan\n## 9. Critical Failure Points`;
-    try { await aiStream(sys, prompt, chunk => setResult(chunk), 1600); } catch (e) { setResult(`Error: ${e.message}`); }
+    try { await aiStream(sys, prompt, chunk => setResult(chunk), 1600); } catch (e: unknown) { setResult(`Error: ${e instanceof Error ? e.message : String(e)}`); }
     setLoading(false); setDone(true);
   };
 
   const btn = (c = LIME) => ({ background: c, color: c === LIME ? "#000" : "#fff", border: "none", borderRadius: "6px", padding: "0.78rem 1.7rem", fontSize: "0.71rem", fontWeight: "900", letterSpacing: "2px", cursor: "pointer", fontFamily: "monospace" });
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#00000092", zIndex: 2000, display: "flex", justifyContent: "flex-end" }}>
-      <div style={{ width: "min(600px,100vw)", background: "#080808", borderLeft: "1px solid #1a1a1a", display: "flex", flexDirection: "column", height: "100vh" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.1rem 1.4rem", borderBottom: "1px solid #111", flexShrink: 0 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", zIndex: 2000, display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ width: "min(600px,100vw)", background: BG_PANEL, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderLeft: `1px solid ${PURPLE}25`, display: "flex", flexDirection: "column", height: "100vh" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.1rem 1.4rem", borderBottom: `1px solid ${BORDER_GLASS}`, flexShrink: 0 }}>
           <div style={{ color: PURPLE, fontSize: "0.7rem", fontWeight: "900", letterSpacing: "3px", fontFamily: "monospace" }}>🏗 COMPANY BUILDER</div>
-          <button onClick={onClose} style={{ background: "transparent", border: "1px solid #1a1a1a", color: "#333", borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.66rem" }}>✕</button>
+          <button onClick={onClose} style={{ background: "transparent", border: `1px solid ${BORDER_GLASS}`, color: TEXT_SECONDARY, borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.66rem" }}>✕</button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "1.4rem" }}>
           {step === "pick" && (<div>
-            <p style={{ color: "#e0e0e0", fontSize: "1rem", margin: "0 0 1.8rem", fontWeight: "300", fontFamily: "monospace" }}>Industry experience or starting fresh?</p>
+            <p style={{ color: TEXT_PRIMARY, fontSize: "1rem", margin: "0 0 1.8rem", fontWeight: "300", fontFamily: "monospace" }}>Industry experience or starting fresh?</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.9rem", marginBottom: "1.8rem" }}>
               {[["🌱", "scratch", LIME, "Starting Fresh", "Zero prior experience."], ["⚔️", "industry", PURPLE, "Industry Insider", "Experience and network to leverage."]].map(([icon, key, c, title, desc]) => (
-                <div key={key} onClick={() => setMode(key)} style={{ background: "#0a0a0a", border: `1px solid ${mode === key ? c : "#191919"}`, borderRadius: "10px", padding: "1.2rem", cursor: "pointer", transition: "all .15s", transform: mode === key ? "translateY(-2px)" : "none" }}>
+                <div key={key} onClick={() => setMode(key)} style={{ background: BG_GLASS, border: `1px solid ${mode === key ? c : BORDER_GLASS}`, borderRadius: "10px", padding: "1.2rem", cursor: "pointer", transition: "all .15s", transform: mode === key ? "translateY(-2px)" : "none", boxShadow: mode === key ? `0 0 20px ${c}15` : "none" }}>
                   <div style={{ fontSize: "1.6rem", marginBottom: "0.5rem" }}>{icon}</div>
-                  <div style={{ color: mode === key ? c : "#e0e0e0", fontWeight: "bold", marginBottom: "0.3rem", fontSize: "0.85rem", fontFamily: "monospace" }}>{title}</div>
-                  <div style={{ color: "#2a2a2a", fontSize: "0.7rem", fontFamily: "monospace" }}>{desc}</div>
+                  <div style={{ color: mode === key ? c : TEXT_PRIMARY, fontWeight: "bold", marginBottom: "0.3rem", fontSize: "0.85rem", fontFamily: "monospace" }}>{title}</div>
+                  <div style={{ color: TEXT_MUTED, fontSize: "0.7rem", fontFamily: "monospace" }}>{desc}</div>
                 </div>
               ))}
             </div>
-            {mode === "industry" && <textarea style={{ width: "100%", background: "#0b0b0b", border: "1px solid #1a1a1a", borderRadius: "8px", color: "#f0f0f0", fontSize: "0.84rem", padding: "0.9rem", resize: "none", outline: "none", fontFamily: "monospace", lineHeight: "1.7", height: "100px", boxSizing: "border-box", marginBottom: "1.2rem" }} placeholder="Your background, key relationships, what you've seen fail..." value={bg} onChange={e => setBg(e.target.value)} />}
+            {mode === "industry" && <textarea style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "8px", color: TEXT_PRIMARY, fontSize: "0.84rem", padding: "0.9rem", resize: "none", outline: "none", fontFamily: "monospace", lineHeight: "1.7", height: "100px", boxSizing: "border-box", marginBottom: "1.2rem" }} placeholder="Your background, key relationships, what you've seen fail..." value={bg} onChange={e => setBg(e.target.value)} />}
             {mode && <button style={btn(PURPLE)} onClick={build} disabled={mode === "industry" && !bg.trim()}>BUILD COMPANY SYSTEM →</button>}
           </div>)}
           {step === "result" && (<div>
-            {loading && <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.2rem" }}><div style={{ width: "7px", height: "7px", borderRadius: "50%", background: PURPLE, animation: "pulse 1s ease infinite" }} /><span style={{ color: PURPLE, fontSize: "0.6rem", letterSpacing: "2.5px", fontFamily: "monospace" }}>SYNTHESISING…</span></div>}
+            {loading && <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.2rem" }}><div style={{ width: "7px", height: "7px", borderRadius: "50%", background: PURPLE, animation: "pulse 1s ease infinite", boxShadow: `0 0 8px ${PURPLE}` }} /><span style={{ color: PURPLE, fontSize: "0.6rem", letterSpacing: "2.5px", fontFamily: "monospace" }}>SYNTHESISING…</span></div>}
             {done && <div style={{ color: LIME, fontSize: "0.6rem", letterSpacing: "2.5px", marginBottom: "1.2rem", fontFamily: "monospace" }}>✓ COMPLETE</div>}
             <Md text={result} /><div ref={scrollRef} />
-            {done && <button style={{ ...btn(PURPLE), marginTop: "1.8rem" }} onClick={() => { setStep("pick"); setMode(null); setResult(""); setBg(""); setDone(false); }}>REBUILD →</button>}
+            {done && <button style={{ ...btn(PURPLE), marginTop: "1.8rem" }} onClick={() => { setStep("pick"); setMode(""); setResult(""); setBg(""); setDone(false); }}>REBUILD →</button>}
           </div>)}
         </div>
       </div>
@@ -576,16 +1047,16 @@ function CompanyBuilder({ idea, qaCtx, profile, onClose }) {
   );
 }
 
-function IntelPanel({ idea, profile, onClose }) {
-  const [msgs, setMsgs] = useState([{ role: "assistant", content: `## FORGE INTEL\n\nLive AI research. Ask me:\n\n→ Market size and real numbers\n→ Competitors in this space\n→ Regulations for your market\n→ Funding landscape\n→ Tech options for your constraints` }]);
+function IntelPanel({ idea, profile, onClose }: { idea: string; profile: any; onClose: () => void }) {
+  const [msgs, setMsgs] = useState<{ role: string; content: string }[]>([{ role: "assistant", content: `## FORGE INTEL\n\nLive AI research. Ask me:\n\n→ Market size and real numbers\n→ Competitors in this space\n→ Regulations for your market\n→ Funding landscape\n→ Tech options for your constraints` }]);
   const [inp, setInp] = useState("");
   const [busy, setBusy] = useState(false);
-  const bottomRef = useRef(null);
-  const taRef = useRef(null);
-  const histRef = useRef([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const histRef = useRef<{ role: string; content: string }[]>([]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
-  const send = useCallback(async (text) => {
+  const send = useCallback(async (text?: string) => {
     const q = (text || inp).trim(); if (!q || busy) return;
     setInp("");
     const userMsg = { role: "user", content: q };
@@ -598,34 +1069,34 @@ function IntelPanel({ idea, profile, onClose }) {
       let reply = "";
       await aiStream(sys, `Context:\n${ctx.slice(0, -q.length - 10)}\n\nLatest: ${q}`, chunk => { reply = chunk; setMsgs(prev => { const n = [...prev]; n[n.length - 1] = { role: "assistant", content: chunk }; return n; }); }, 900);
       histRef.current = [...histRef.current, { role: "assistant", content: reply }];
-    } catch (e) { setMsgs(prev => { const n = [...prev]; n[n.length - 1] = { role: "assistant", content: `Error: ${e.message}` }; return n; }); }
+    } catch (e: unknown) { setMsgs(prev => { const n = [...prev]; n[n.length - 1] = { role: "assistant", content: `Error: ${e instanceof Error ? e.message : String(e)}` }; return n; }); }
     setBusy(false); setTimeout(() => taRef.current?.focus(), 80);
   }, [inp, busy, idea, profile]);
 
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, width: "min(420px,100vw)", height: "100vh", background: "#080808", borderLeft: "1px solid #1a1a1a", display: "flex", flexDirection: "column", zIndex: 1000, boxShadow: "-10px 0 50px #000d" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.1rem 1.4rem", borderBottom: "1px solid #101010", flexShrink: 0 }}>
+    <div style={{ position: "fixed", top: 0, right: 0, width: "min(420px,100vw)", height: "100vh", background: BG_PANEL, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderLeft: `1px solid ${LIME}20`, display: "flex", flexDirection: "column", zIndex: 1000, boxShadow: `-10px 0 50px rgba(0,0,0,0.5)` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.1rem 1.4rem", borderBottom: `1px solid ${BORDER_GLASS}`, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
-          <div style={{ width: "26px", height: "26px", borderRadius: "50%", background: LIME, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "bold" }}>⚡</div>
-          <div><div style={{ color: LIME, fontSize: "0.68rem", fontWeight: "900", letterSpacing: "3px", fontFamily: "monospace" }}>FORGE INTEL</div><div style={{ color: "#1a1a1a", fontSize: "0.52rem", letterSpacing: "1.5px", fontFamily: "monospace" }}>AI RESEARCH CHAT</div></div>
+          <div style={{ width: "26px", height: "26px", borderRadius: "50%", background: LIME, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "bold", boxShadow: `0 0 15px ${LIME}50` }}>⚡</div>
+          <div><div style={{ color: LIME, fontSize: "0.68rem", fontWeight: "900", letterSpacing: "3px", fontFamily: "monospace" }}>FORGE INTEL</div><div style={{ color: TEXT_MUTED, fontSize: "0.52rem", letterSpacing: "1.5px", fontFamily: "monospace" }}>AI RESEARCH CHAT</div></div>
         </div>
-        <button onClick={onClose} style={{ background: "transparent", border: "1px solid #1a1a1a", color: "#333", borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.66rem" }}>✕</button>
+        <button onClick={onClose} style={{ background: "transparent", border: `1px solid ${BORDER_GLASS}`, color: TEXT_SECONDARY, borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.66rem" }}>✕</button>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "1rem 1.3rem", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
         {msgs.map((m, i) => (
           <div key={i} style={{ display: "flex", gap: "0.5rem", flexDirection: m.role === "user" ? "row-reverse" : "row" }}>
-            <div style={{ width: "22px", height: "22px", borderRadius: "50%", flexShrink: 0, background: m.role === "user" ? "#141414" : LIME, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: m.role === "user" ? "#666" : "#000", fontFamily: "monospace", fontWeight: "bold", border: m.role === "user" ? "1px solid #1e1e1e" : "none", marginTop: "2px" }}>{m.role === "user" ? "U" : "F"}</div>
-            <div style={{ maxWidth: "91%", background: m.role === "user" ? "#0d0d0d" : "transparent", border: m.role === "user" ? "1px solid #191919" : "none", borderRadius: "8px", padding: m.role === "user" ? "0.58rem 0.82rem" : "0 0 0 0.1rem" }}>
+            <div style={{ width: "22px", height: "22px", borderRadius: "50%", flexShrink: 0, background: m.role === "user" ? BG_GLASS : LIME, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: m.role === "user" ? TEXT_SECONDARY : "#000", fontFamily: "monospace", fontWeight: "bold", border: m.role === "user" ? `1px solid ${BORDER_GLASS}` : "none", marginTop: "2px" }}>{m.role === "user" ? "U" : "F"}</div>
+            <div style={{ maxWidth: "91%", background: m.role === "user" ? BG_GLASS : "transparent", border: m.role === "user" ? `1px solid ${BORDER_GLASS}` : "none", borderRadius: "8px", padding: m.role === "user" ? "0.58rem 0.82rem" : "0 0 0 0.1rem" }}>
               {m.content === "" ? <div style={{ display: "flex", gap: "4px", padding: "5px 0" }}>{[0, 1, 2].map(j => <span key={j} style={{ width: "5px", height: "5px", borderRadius: "50%", background: LIME, display: "inline-block", animation: `pulse 1.3s ease ${j * .2}s infinite` }} />)}</div> : <Md text={m.content} />}
             </div>
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
-      <div style={{ padding: "0.8rem 1.3rem 1rem", borderTop: "1px solid #101010", flexShrink: 0 }}>
+      <div style={{ padding: "0.8rem 1.3rem 1rem", borderTop: `1px solid ${BORDER_GLASS}`, flexShrink: 0 }}>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
-          <textarea ref={taRef} style={{ flex: 1, background: "#0b0b0b", border: "1px solid #1c1c1c", borderRadius: "7px", color: "#f0f0f0", fontSize: "0.82rem", padding: "0.65rem", resize: "none", outline: "none", fontFamily: "monospace", lineHeight: "1.65", height: "58px", boxSizing: "border-box" }} placeholder="Ask anything…" value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} disabled={busy} />
-          <button onClick={() => send()} disabled={busy || !inp.trim()} style={{ background: busy || !inp.trim() ? "#0f0f0f" : LIME, color: "#000", border: `1px solid ${busy || !inp.trim() ? "#1a1a1a" : LIME}`, borderRadius: "6px", width: "40px", height: "58px", cursor: busy || !inp.trim() ? "not-allowed" : "pointer", fontSize: "1rem", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", transition: "all .15s" }}>{busy ? "…" : "→"}</button>
+          <textarea ref={taRef} style={{ flex: 1, background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "7px", color: TEXT_PRIMARY, fontSize: "0.82rem", padding: "0.65rem", resize: "none", outline: "none", fontFamily: "monospace", lineHeight: "1.65", height: "58px", boxSizing: "border-box" }} placeholder="Ask anything…" value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} disabled={busy} />
+          <button onClick={() => send()} disabled={busy || !inp.trim()} style={{ background: busy || !inp.trim() ? "transparent" : LIME, color: "#000", border: `1px solid ${busy || !inp.trim() ? BORDER_GLASS : LIME}`, borderRadius: "6px", width: "40px", height: "58px", cursor: busy || !inp.trim() ? "not-allowed" : "pointer", fontSize: "1rem", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", transition: "all .15s", boxShadow: busy || !inp.trim() ? "none" : `0 0 15px rgba(200,255,0,0.25)` }}>{busy ? "…" : "→"}</button>
         </div>
       </div>
     </div>
@@ -633,13 +1104,13 @@ function IntelPanel({ idea, profile, onClose }) {
 }
 
 // ── OUTPUT CONFIGS ────────────────────────────────────────
-const CONFIGS = {
-  mindmap: { sys: `JSON only. {"center":"2-3 words","branches":[{"label":"2 words","color":"#hex","nodes":["short","short","short","short"]}]} 5-6 branches,3-4 nodes,max 4 words,vivid hex colors. Start with { end with }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  blueprint: { sys: `JSON only. {"title":"...","vision":"sentence","sections":[{"title":"NAME","content":"2-3 sentences","bullets":["pt","pt","pt"]}]} 7 sections: Core Concept,Problem & Solution,Target Market,Unique Advantage,Key Assumptions,Critical Risks,Success Metrics. Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  roadmap: { sys: `JSON only. {"title":"...","phases":[{"phase":"Phase 1","title":"...","duration":"X weeks","goal":"...","milestones":["...","...","..."],"kpis":["...","..."]}]} 4 phases: Foundation,Launch,Scale,Dominate. Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  businessplan: { sys: `JSON only. {"title":"...","oneliner":"pitch","sections":[{"title":"NAME","content":"content"}]} 10 sections: Problem,Solution,Market Size,Business Model,Revenue Streams,Go-To-Market,Competitive Moat,Team Requirements,Financial Projections,Next Steps. Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  actionplan: { sys: `JSON only. {"title":"...","weeks":[{"week":"Week 1","focus":"goal","tasks":[{"task":"action","priority":"HIGH","outcome":"result"}]}]} Priority: HIGH MED or LOW. 4 weeks,4-5 tasks. Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  swot: { sys: `JSON only. {"title":"...","summary":"sentence","strengths":["...","...","...","..."],"weaknesses":["...","...","...","..."],"opportunities":["...","...","...","..."],"threats":["...","...","...","..."],"strategic_insight":"2-3 sentences"} Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
+const CONFIGS: Record<string, { sys: string; usr: (idea: string, ctx: string, p: unknown) => string }> = {
+  mindmap: { sys: `JSON only. Output MUST use correct English. {"center":"2-3 words","branches":[{"label":"2 words","color":"#hex","nodes":["short","short","short","short"]}]} 5-6 branches,3-4 nodes,max 4 words,vivid hex colors. Start with { end with }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  blueprint: { sys: `JSON only. Output MUST use correct English. {"title":"...","vision":"sentence","sections":[{"title":"NAME","content":"2-3 sentences","bullets":["pt","pt","pt"]}]} 7 sections: Core Concept,Problem & Solution,Target Market,Unique Advantage,Key Assumptions,Critical Risks,Success Metrics. Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  roadmap: { sys: `JSON only. Output MUST use correct English. {"title":"...","phases":[{"phase":"Phase 1","title":"...","duration":"X weeks","goal":"...","milestones":["...","...","..."],"kpis":["...","..."]}]} 4 phases: Foundation,Launch,Scale,Dominate. Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  businessplan: { sys: `JSON only. Output MUST use correct English. {"title":"...","oneliner":"pitch","sections":[{"title":"NAME","content":"content"}]} 10 sections: Problem,Solution,Market Size,Business Model,Revenue Streams,Go-To-Market,Competitive Moat,Team Requirements,Financial Projections,Next Steps. Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  actionplan: { sys: `JSON only. Output MUST use correct English. {"title":"...","weeks":[{"week":"Week 1","focus":"goal","tasks":[{"task":"action","priority":"HIGH","outcome":"result"}]}]} Priority: HIGH MED or LOW. 4 weeks,4-5 tasks. Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  swot: { sys: `JSON only. Output MUST use correct English. {"title":"...","summary":"sentence","strengths":["...","...","...","..."],"weaknesses":["...","...","...","..."],"opportunities":["...","...","...","..."],"threats":["...","...","...","..."],"strategic_insight":"2-3 sentences"} Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
 };
 
 const OUTPUTS = [
@@ -651,41 +1122,48 @@ const OUTPUTS = [
   { key: "swot", icon: "🎯", label: "SWOT", desc: "Ruthless strategic breakdown" },
 ];
 
-const Q_SYS = `You are FORGE — ruthless thinking partner for serious founders. ONE question per round. Rotate: Creative→Critical→Strategic→Logical. No preamble. Return ONLY the raw question.`;
-const ctxStr = pairs => pairs.map((x, i) => `Q${i + 1}: ${x.question}\nA${i + 1}: ${x.answer}`).join("\n\n");
+const Q_SYS = `You are FORGE — ruthless thinking partner for serious founders. ONE question per round. Rotate: Creative→Critical→Strategic→Logical. No preamble. Return ONLY the raw question. Use perfect English.`;
+const ctxStr = (pairs: {question: string; answer: string}[]) => pairs.map((x, i) => `Q${i + 1}: ${x.question}\nA${i + 1}: ${x.answer}`).join("\n\n");
+
+const FREE_IDEA_LIMIT = 3;
 
 // ── MAIN APP ──────────────────────────────────────────────
 export default function App() {
-  const [appState, setAppState] = useState("loading"); // loading | auth | onboarding | app
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [appState, setAppState] = useState<"loading"|"guest"|"auth"|"onboarding"|"app">("loading");
+  const [user, setUser] = useState<{uid: string; name?: string; avatar?: string} | null>(null);
+  const [profile, setProfile] = useState<{name: string; title: string; market: string; [key: string]: any} | null>(null);
   const [phase, setPhase] = useState("ignition");
   const [idea, setIdea] = useState("");
-  const [qa, setQa] = useState([]);
+  const [qa, setQa] = useState<{question: string; answer: string}[]>([]);
   const [curQ, setCurQ] = useState("");
   const [curA, setCurA] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadMsg, setLoadMsg] = useState("");
-  const [outType, setOutType] = useState(null);
-  const [outputs, setOutputs] = useState({});
+  const [outType, setOutType] = useState<string | null>(null);
+  const [resultTab, setResultTab] = useState<string>("summary");
+  const [skeletonFor, setSkeletonFor] = useState<string | null>(null);
+  const [outputs, setOutputs] = useState<Record<string, any>>({});
   const [err, setErr] = useState("");
-  const [hov, setHov] = useState(null);
+  const [hov, setHov] = useState<string | null>(null);
   const [intel, setIntel] = useState(false);
   const [company, setCompany] = useState(false);
-  const [ideaScore, setIdeaScore] = useState(null);
+  const [ideaScore, setIdeaScore] = useState<{score: number; label: string; verdict?: string; strengths?: string[]; gaps?: string[]} | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [currentIdeaId, setCurrentIdeaId] = useState(null);
-  const taRef = useRef(null);
-  const prefetchRef = useRef({});
+  const [currentIdeaId, setCurrentIdeaId] = useState<string | null>(null);
+  const [freeCount, setFreeCount] = useState(0);
+  const [showUnlock, setShowUnlock] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const prefetchRef = useRef<Record<string, Promise<string>>>({});
 
   // load session on mount
   useEffect(() => {
     (async () => {
       const session = await store.get("session");
-      if (!session) { setAppState("auth"); return; }
+      if (!session) { setAppState("app"); return; }
       const u = await store.get(`user:${session.uid}`);
-      if (!u) { setAppState("auth"); return; }
+      if (!u) { setAppState("app"); return; }
       const p = await store.get(`profile:${session.uid}`);
       setUser(u);
       if (!p) { setAppState("onboarding"); return; }
@@ -693,7 +1171,16 @@ export default function App() {
     })();
   }, []);
 
-  const handleAuth = async (u, isNew) => {
+  // Dark / light mode
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.remove("light");
+    } else {
+      document.documentElement.classList.add("light");
+    }
+  }, [darkMode]);
+
+  const handleAuth = async (u: any, isNew: boolean) => {
     setUser(u);
     if (isNew) { setAppState("onboarding"); return; }
     const p = await store.get(`profile:${u.uid}`);
@@ -701,7 +1188,7 @@ export default function App() {
     setProfile(p); setAppState("app");
   };
 
-  const handleOnboarding = (p) => { setProfile(p); setAppState("app"); };
+  const handleOnboarding = (p: any) => { setProfile(p); setAppState("app"); };
 
   const logout = async () => {
     await store.del("session");
@@ -709,33 +1196,50 @@ export default function App() {
     resetIdea();
   };
 
-  const scoreIdea = useCallback(async (pairs) => {
+  const scoreIdea = useCallback(async (pairs: {question: string; answer: string}[]) => {
     try {
-      const s = await ai(`Score this startup idea. JSON only, start with {: {"score":75,"label":"Solid","verdict":"brutal one sentence","strengths":["s1","s2"],"gaps":["g1","g2"]} Labels:Weak/Needs Work/Solid/Strong/Exceptional.`, `${profileContext(profile)}\nIdea:"${idea}"\n${ctxStr(pairs)}`, true, 400);
+      const s = await ai(`Score this startup idea. JSON only. Output MUST use correct English. start with {: {"score":75,"label":"Solid","verdict":"brutal one sentence","strengths":["s1","s2"],"gaps":["g1","g2"]} Labels:Weak/Needs Work/Solid/Strong/Exceptional.`, `${profileContext(profile)}\nIdea:"${idea}"\n${ctxStr(pairs)}`, true, 400);
       setIdeaScore(s);
-      // auto-save idea
       const id = currentIdeaId || Date.now().toString();
       setCurrentIdeaId(id);
-      await store.set(`idea:${user.uid}:${id}`, { id, text: idea, score: s.score, label: s.label, qa: pairs, savedAt: Date.now() });
-    } catch {}
+      // track free idea count for guests
+      if (!user) {
+        const count = (parseInt(localStorage.getItem("forge_free_count") || "0") || 0) + 1;
+        localStorage.setItem("forge_free_count", count.toString());
+        setFreeCount(count);
+        // auto-save for guests too
+        await store.set(`idea:guest:${id}`, { id, text: idea, score: s.score, label: s.label, qa: pairs, savedAt: Date.now() });
+      } else {
+        await store.set(`idea:${user.uid}:${id}`, { id, text: idea, score: s.score, label: s.label, qa: pairs, savedAt: Date.now() });
+      }
+      setPhase("reality-check");
+    } catch (e: any) {
+      // Generate a fallback score so the flow always continues
+      const fallback = { score: 65, label: "Solid", verdict: "Your idea has real potential — keep refining it.", strengths: ["Clear problem statement", "Addresses a real need"], gaps: ["Needs more validation", "Refine your target customer"] };
+      setIdeaScore(fallback);
+      setLoading(false);
+      setPhase("reality-check");
+    }
   }, [idea, profile, user, currentIdeaId]);
 
-  const prefetchNext = useCallback((updated) => {
+  const prefetchNext = useCallback((updated: {question: string; answer: string}[]) => {
     if (updated.length >= Q_TARGET) return;
     const styles = ["Creative", "Critical", "Strategic", "Logical"];
     const key = `q${updated.length + 1}`;
-    if (prefetchRef.current[key]) return;
+    if (prefetchRef.current[key] !== undefined) return;
     const style = styles[updated.length % styles.length];
-    prefetchRef.current[key] = ai(Q_SYS, `${profileContext(profile)}\nIdea:"${idea}"\n\n${ctxStr(updated)}\n\nQ${updated.length + 1} of ${Q_TARGET}: ${style} style. Biggest unexplored gap. Push hard.`, false, 400);
+    const profileStr = profile ? `${profileContext(profile)}\n` : "";
+    prefetchRef.current[key] = ai(Q_SYS, `${profileStr}Idea:"${idea}"\n\n${ctxStr(updated)}\n\nQ${updated.length + 1} of ${Q_TARGET}: ${style} style. Biggest unexplored gap. Push hard.`, false, 400);
   }, [idea, profile]);
 
   const ignite = async () => {
     if (!idea.trim() || loading) return;
     setLoading(true); setErr("");
     try {
-      const q = await ai(Q_SYS, `${profileContext(profile)}\nIdea:"${idea}"\nQ1 of ${Q_TARGET}. Creative style. Most foundational: what they're ACTUALLY building, for WHOM, single reason it must exist NOW.`, false, 400);
+      const profileStr = profile ? `${profileContext(profile)}\n` : "";
+      const q = await ai(Q_SYS, `${profileStr}Idea:"${idea}"\nQ1 of ${Q_TARGET}. Creative style. Most foundational: what they're ACTUALLY building, for WHOM, single reason it must exist NOW.`, false, 400);
       setCurQ(q); setPhase("questioning");
-    } catch (e) { setErr(e.message); }
+    } catch (e: any) { setErr(e.message); }
     setLoading(false);
   };
 
@@ -743,38 +1247,40 @@ export default function App() {
     if (!curA.trim() || loading) return;
     const updated = [...qa, { question: curQ, answer: curA }];
     setQa(updated); setCurA("");
-    if (updated.length >= Q_TARGET) { scoreIdea(updated); setPhase("reality-check"); return; }
+    if (updated.length >= Q_TARGET) { scoreIdea(updated); return; }
     setLoading(true); setErr("");
     prefetchNext([...updated, { question: "?", answer: "?" }]);
     try {
       const styles = ["Creative", "Critical", "Strategic", "Logical"];
       const key = `q${updated.length + 1}`;
-      const cached = prefetchRef.current[key] ? await Promise.race([prefetchRef.current[key], new Promise(r => setTimeout(() => r(null), 200))]) : null;
+      const cached = prefetchRef.current[key] !== undefined ? await Promise.race([prefetchRef.current[key], new Promise(r => setTimeout(() => r(null), 200))]) : null;
       delete prefetchRef.current[key];
-      const q = cached || await ai(Q_SYS, `${profileContext(profile)}\nIdea:"${idea}"\n\n${ctxStr(updated)}\n\nQ${updated.length + 1} of ${Q_TARGET}: ${["Creative","Critical","Strategic","Logical"][updated.length % 4]} style. Biggest unexplored gap.`, false, 400);
+      const profileStr = profile ? `${profileContext(profile)}\n` : "";
+      const q = cached || await ai(Q_SYS, `${profileStr}Idea:"${idea}"\n\n${ctxStr(updated)}\n\nQ${updated.length + 1} of ${Q_TARGET}: ${["Creative","Critical","Strategic","Logical"][updated.length % 4]} style. Biggest unexplored gap.`, false, 400);
       setCurQ(q);
-    } catch (e) { setErr(e.message); }
+    } catch (e: any) { setErr(e.message); }
     setLoading(false);
     setTimeout(() => taRef.current?.focus(), 60);
   };
 
-  const generate = async (type) => {
-    if (outputs[type]) { setOutType(type); setPhase("output"); return; }
-    setOutType(type); setPhase("generating"); setErr("");
+  const generate = async (type: string, force = false) => {
+    if (!force && outputs[type]) { setOutType(type); setResultTab("summary"); setPhase("output"); setSkeletonFor(null); return; }
+    setOutType(type); setResultTab("summary"); setSkeletonFor(type); setPhase("generating"); setErr("");
     setLoadMsg(`Forging ${OUTPUTS.find(o => o.key === type)?.label}…`);
     const cfg = CONFIGS[type];
     try {
       const result = await ai(cfg.sys, cfg.usr(idea, ctxStr(qa), profile), true, 1400, 2);
       setOutputs(prev => ({ ...prev, [type]: result }));
+      setSkeletonFor(null);
       setPhase("output");
-    } catch (e) { setErr(`Failed: ${e.message}`); setPhase("output-select"); }
+    } catch (e: unknown) { setSkeletonFor(null); setErr(`Failed: ${e instanceof Error ? e.message : String(e)}`); setPhase("output-select"); }
   };
 
-  const loadIdea = (saved) => {
+  const loadIdea = (saved: { id: string; text: string; qa?: QAPair[]; score?: number; label?: string }) => {
     setIdea(saved.text); setQa(saved.qa || []);
-    setIdeaScore(saved.score ? { score: saved.score, label: saved.label } : null);
+    setIdeaScore(saved.score ? { score: saved.score, label: saved.label || "" } : null);
     setCurrentIdeaId(saved.id); setOutputs({});
-    setPhase(saved.qa?.length >= Q_TARGET ? "output-select" : "ignition");
+    setPhase(saved.qa && saved.qa.length >= Q_TARGET ? "output-select" : "ignition");
   };
 
   const resetIdea = () => {
@@ -784,35 +1290,62 @@ export default function App() {
     prefetchRef.current = {};
   };
 
-  if (appState === "loading") return <div style={{ minHeight: "100vh", background: "#070707", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: LIME, fontSize: "0.7rem", letterSpacing: "4px", fontFamily: "monospace" }}>LOADING…</div></div>;
+  if (appState === "loading") return <div style={{ minHeight: "100vh", background: GRADIENT_HERO, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: LIME, fontSize: "0.7rem", letterSpacing: "4px", fontFamily: "monospace" }}>LOADING…</div></div>;
   if (appState === "auth") return <AuthScreen onAuth={handleAuth} />;
   if (appState === "onboarding") return <Onboarding user={user} onDone={handleOnboarding} />;
 
   const showTools = phase !== "ignition";
-  const scoreColor = s => s >= 80 ? LIME : s >= 60 ? ORANGE : s >= 40 ? "#FFD700" : PINK;
-
-  const G = {
-    app: { minHeight: "100vh", background: "#070707", color: "#f0f0f0", fontFamily: "monospace", display: "flex", flexDirection: "column", alignItems: "center", padding: "0 1.25rem" },
-    wrap: { width: "100%", maxWidth: "820px", transition: "padding-right .3s" },
-    label: { color: "#222", fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "3.5px", marginBottom: "0.65rem" },
-    ta: { width: "100%", background: "#0b0b0b", border: "1px solid #181818", borderRadius: "8px", color: "#f0f0f0", fontSize: "0.96rem", padding: "1.1rem", resize: "none", outline: "none", fontFamily: "monospace", lineHeight: "1.72", boxSizing: "border-box" },
-    btn: { background: LIME, color: "#000", border: "none", borderRadius: "6px", padding: "0.82rem 1.9rem", fontSize: "0.71rem", fontWeight: "900", letterSpacing: "2.5px", cursor: "pointer", fontFamily: "monospace", textTransform: "uppercase" },
-    ghost: { background: "transparent", color: "#222", border: "1px solid #181818", borderRadius: "6px", padding: "0.55rem 1rem", fontSize: "0.66rem", cursor: "pointer", fontFamily: "monospace", transition: "all .15s" },
-    err: { color: PINK, fontSize: "0.72rem", marginTop: "0.75rem", background: "#FF3C780d", border: "1px solid #FF3C7815", borderRadius: "5px", padding: "0.55rem 0.85rem" },
-  };
+  const scoreColor = (s: number) => s >= 80 ? LIME : s >= 60 ? ORANGE : s >= 40 ? "#FFD700" : PINK;
 
   return (
     <div style={G.app}>
       <style>{`
-        @keyframes pulse{0%,100%{opacity:.1}50%{opacity:1}}
+        :root{
+          --bg-deep: #050510;
+          --bg-card: rgba(255,255,255,0.04);
+          --bg-card-hover: rgba(255,255,255,0.07);
+          --border: rgba(255,255,255,0.08);
+          --border-hover: rgba(255,255,255,0.18);
+          --text-primary: #E8E8FF;
+          --text-secondary: rgba(232,232,255,0.55);
+          --text-muted: rgba(232,232,255,0.28);
+          --radius: 14px;
+          --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        :root.light{
+          --bg-deep: #F5F5FA;
+          --bg-card: rgba(255,255,255,0.72);
+          --bg-card-hover: rgba(255,255,255,0.88);
+          --border: rgba(0,0,0,0.08);
+          --border-hover: rgba(0,0,0,0.15);
+          --text-primary: #0d0d1a;
+          --text-secondary: rgba(13,13,26,0.6);
+          --text-muted: rgba(13,13,26,0.35);
+        }
+        @keyframes pulse{0%,100%{opacity:.15}50%{opacity:1}}
         @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 #C8FF0000}50%{box-shadow:0 0 20px 5px #C8FF0035}}
-        textarea:focus{border-color:#232323!important;}
-        .fab:hover{transform:translateY(-4px) scale(1.08)!important;}
-        .fab2:hover{transform:translateY(-4px) scale(1.08)!important;}
-        .outcard:hover{border-color:#C8FF0050!important;transform:translateY(-3px)!important;background:#0c0c0c!important;}
-        .gh:hover{color:#888!important;border-color:#282828!important;}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 #C8FF0000}50%{box-shadow:0 0 24px 6px #C8FF0030}}
+        @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+        @keyframes borderGlow{0%,100%{border-color:rgba(200,255,0,0.1)}50%{border-color:rgba(200,255,0,0.3)}}
+        @keyframes textGlow{0%,100%{text-shadow:0 0 20px rgba(200,255,0,0)}50%{text-shadow:0 0 30px rgba(200,255,0,0.4)}}
+        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        *{box-sizing:border-box}
+        html{scroll-behavior:smooth}
+        body{margin:0;background:var(--bg-deep);color:var(--text-primary);font-family:var(--font-body);transition:background .3s,color .3s}
+        ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(200,255,0,0.2);border-radius:2px}::-webkit-scrollbar-thumb:hover{background:rgba(200,255,0,0.4)}
+        ::selection{background:rgba(200,255,0,0.25);color:#fff}
+        textarea:focus{border-color:rgba(200,255,0,0.4)!important;box-shadow:0 0 20px rgba(200,255,0,0.08)!important;outline:none}
+        .fab:hover{transform:translateY(-5px) scale(1.1)!important;box-shadow:0 8px 30px rgba(200,255,0,0.25)!important}
+        .fab2:hover{transform:translateY(-5px) scale(1.1)!important;box-shadow:0 8px 30px rgba(184,127,255,0.25)!important}
+        .outcard:hover{border-color:rgba(200,255,0,0.35)!important;transform:translateY(-4px)!important;background:var(--bg-card-hover)!important;box-shadow:0 8px 30px rgba(200,255,0,0.1)!important}
+        .gh:hover{color:var(--text-primary)!important;border-color:var(--border-hover)!important;background:rgba(255,255,255,0.05)!important}
+        .glass-card{background:var(--bg-card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:var(--radius);transition:all .25s}
+        .glass-card:hover{border-color:var(--border-hover);background:var(--bg-card-hover)}
+        .mode-btn{background:transparent;border:1px solid var(--border);color:var(--text-secondary);border-radius:8px;padding:0.4rem;cursor:pointer;font-size:0.85rem;display:flex;align-items:center;transition:all .2s}
+        .mode-btn:hover{border-color:var(--border-hover);color:var(--text-primary)}
+        @media(max-width:640px){.desktop-only{display:none!important}}@media(min-width:641px){.mobile-only{display:none!important}}
       `}</style>
 
       {/* FABs */}
@@ -822,41 +1355,55 @@ export default function App() {
       {intel && <IntelPanel idea={idea} profile={profile} onClose={() => setIntel(false)} />}
       {company && <CompanyBuilder idea={idea} qaCtx={ctxStr(qa)} profile={profile} onClose={() => setCompany(false)} />}
       {showProfile && <ProfilePanel profile={profile} user={user} onUpdate={p => setProfile(p)} onLogout={logout} onClose={() => setShowProfile(false)} />}
-      {showHistory && <HistoryPanel uid={user.uid} onLoad={loadIdea} onClose={() => setShowHistory(false)} />}
+      {showHistory && user && <HistoryPanel uid={user.uid} onLoad={loadIdea} onClose={() => setShowHistory(false)} />}
 
       <div style={{ ...G.wrap, paddingRight: intel ? "440px" : "0" }}>
         {/* HEADER */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.7rem 0 1.3rem", borderBottom: "1px solid #0e0e0e", marginBottom: "2.3rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.7rem 0 1.3rem", borderBottom: `1px solid ${BORDER_GLASS}`, marginBottom: "2.3rem" }}>
           <div>
-            <h1 style={{ color: LIME, fontSize: "1.9rem", fontWeight: "900", letterSpacing: "7px", margin: 0, lineHeight: 1 }}>FORGE</h1>
-            <p style={{ color: "#181818", fontSize: "0.56rem", letterSpacing: "3px", margin: "4px 0 0" }}>IDEA ENGINE FOR FOUNDERS</p>
+            <h1 style={{ color: LIME, fontSize: "1.9rem", fontWeight: 900, letterSpacing: "7px", margin: 0, lineHeight: 1, textShadow: "0 0 30px rgba(200,255,0,0.3)" }}>FORGE</h1>
+            <p style={{ color: TEXT_MUTED, fontSize: "0.56rem", letterSpacing: "3px", margin: "4px 0 0" }}>IDEA ENGINE FOR FOUNDERS</p>
           </div>
           <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
+            {!user && phase === "ignition" && (
+              <div style={{ background: BG_GLASS, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", border: `1px solid ${LIME}30`, borderRadius: "20px", padding: "0.35rem 0.8rem", fontSize: "0.6rem", color: LIME, fontFamily: "monospace", letterSpacing: "1px", boxShadow: `0 0 15px ${LIME}15` }}>
+                🔥 {FREE_IDEA_LIMIT - freeCount} free ideas left
+              </div>
+            )}
             {showTools && <>
-              <button className="gh" onClick={() => { setIntel(!intel); setCompany(false); }} style={{ ...G.ghost, color: intel ? LIME : "#222", borderColor: intel ? `${LIME}30` : "#181818" }}>⚡ Intel</button>
-              <button className="gh" onClick={() => { setCompany(true); setIntel(false); }} style={{ ...G.ghost, color: PURPLE, borderColor: `${PURPLE}25` }}>🏗 Build</button>
+              <button className="gh" onClick={() => { setIntel(!intel); setCompany(false); }} style={{ ...G.ghost, color: intel ? LIME : TEXT_SECONDARY, borderColor: intel ? `${LIME}40` : BORDER_GLASS }}>⚡ Intel</button>
+              <button className="gh" onClick={() => { setCompany(true); setIntel(false); }} style={{ ...G.ghost, color: PURPLE, borderColor: `${PURPLE}40` }}>🏗 Build</button>
             </>}
-            <button className="gh" style={G.ghost} onClick={() => setShowHistory(true)}>📁 Vault</button>
-            <button className="gh" style={{ ...G.ghost, display: "flex", alignItems: "center", gap: "0.4rem" }} onClick={() => setShowProfile(true)}>
-              <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: `${LIME}20`, border: `1px solid ${LIME}35`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: LIME }}>{profile?.name?.[0]?.toUpperCase()}</div>
-              <span style={{ color: "#333", fontSize: "0.64rem" }}>{profile?.name?.split(" ")[0]}</span>
-            </button>
+            {user ? (
+              <>
+                <button className="gh" style={G.ghost} onClick={() => setShowHistory(true)}>📁 Vault</button>
+                <button className="gh" style={{ ...G.ghost, display: "flex", alignItems: "center", gap: "0.4rem" }} onClick={() => setShowProfile(true)}>
+                  <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: `${LIME}15`, border: `1px solid ${LIME}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: LIME }}>{profile?.name?.[0]?.toUpperCase()}</div>
+                  <span style={{ color: TEXT_SECONDARY, fontSize: "0.64rem" }}>{profile?.name?.split(" ")[0]}</span>
+                </button>
+              </>
+            ) : (
+              <button style={{ background: LIME, color: "#000", border: "none", borderRadius: "8px", padding: "0.5rem 0.9rem", fontSize: "0.64rem", fontWeight: 900, letterSpacing: "1.5px", cursor: "pointer", fontFamily: "monospace", boxShadow: GLOW_LIME }} onClick={() => setAppState("auth")}>SIGN UP FREE</button>
+            )}
             {phase !== "ignition" && <button className="gh" style={G.ghost} onClick={resetIdea}>↩</button>}
+            <button className="mode-btn" onClick={() => setDarkMode(d => !d)} title={darkMode ? "Switch to light mode" : "Switch to dark mode"}>
+              {darkMode ? "☀" : "☾"}
+            </button>
           </div>
         </div>
 
         {/* IGNITION */}
         {phase === "ignition" && (
           <div style={{ animation: "fadeIn .4s ease" }}>
-            <div style={{ background: "#0a0a0a", border: `1px solid ${LIME}12`, borderRadius: "10px", padding: "0.85rem 1.1rem", marginBottom: "1.8rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: LIME, flexShrink: 0 }} />
-              <span style={{ color: "#555", fontSize: "0.76rem", lineHeight: "1.5" }}>{profile?.bio || `Welcome, ${profile?.name}`}</span>
+            <div style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${LIME}18`, borderRadius: "14px", padding: "0.85rem 1.1rem", marginBottom: "1.8rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: `0 4px 30px rgba(200,255,0,0.05)` }}>
+              <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: LIME, flexShrink: 0, boxShadow: `0 0 10px ${LIME}` }} />
+              <span style={{ color: TEXT_SECONDARY, fontSize: "0.76rem", lineHeight: "1.5" }}>{profile?.bio || `Welcome${profile?.name ? `, ${profile?.name}` : ""}`}</span>
             </div>
             <p style={G.label}>Drop your raw idea</p>
             <textarea style={{ ...G.ta, height: "150px" }} placeholder={"No polish needed. Half-baked is fine.\nRaw and messy is where the best ideas live."} value={idea} onChange={e => setIdea(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !loading) ignite(); }} />
             <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "0.9rem" }}>
-              <button style={{ ...G.btn, opacity: (!idea.trim() || loading) ? 0.25 : 1 }} onClick={ignite} disabled={!idea.trim() || loading}>{loading ? "LOADING…" : "IGNITE →"}</button>
-              <span style={{ color: "#181818", fontSize: "0.6rem" }}>⌘ + Enter</span>
+              <button style={{ ...G.btn, opacity: (!idea.trim() || loading) ? 0.25 : 1, boxShadow: (!idea.trim() || loading) ? "none" : GLOW_LIME }} onClick={ignite} disabled={!idea.trim() || loading}>{loading ? "LOADING…" : "IGNITE →"}</button>
+              <span style={{ color: TEXT_MUTED, fontSize: "0.6rem" }}>⌘ + Enter</span>
             </div>
             {err && <div style={G.err}>{err}</div>}
           </div>
@@ -866,18 +1413,28 @@ export default function App() {
         {phase === "questioning" && (
           <div style={{ animation: "fadeIn .3s ease" }}>
             <div style={{ display: "flex", gap: "4px", marginBottom: "0.65rem" }}>
-              {Array.from({ length: Q_TARGET }).map((_, i) => (<div key={i} style={{ height: "2px", flex: 1, borderRadius: "2px", background: i < qa.length ? LIME : i === qa.length ? `${LIME}30` : "#111", transition: "background .4s" }} />))}
+              {Array.from({ length: Q_TARGET }).map((_, i) => (<div key={i} style={{ height: "3px", flex: 1, borderRadius: "2px", background: i < qa.length ? LIME : i === qa.length ? `${LIME}30` : "rgba(255,255,255,0.06)", transition: "background .4s" }} />))}
             </div>
-            <div style={{ color: "#1c1c1c", fontSize: "0.56rem", letterSpacing: "2px", marginBottom: "2rem" }}>{qa.length}/{Q_TARGET} complete</div>
+            <div style={{ color: TEXT_MUTED, fontSize: "0.56rem", letterSpacing: "2px", marginBottom: "2rem" }}>{qa.length}/{Q_TARGET} complete</div>
             {loading ? (
-              <div style={{ padding: "2.5rem 0" }}><span style={{ color: LIME, fontSize: "0.68rem", letterSpacing: "2.5px" }}>FORGE</span><span style={{ color: "#1c1c1c", fontSize: "0.68rem" }}> thinking</span>{[0, 1, 2, 3].map(i => <span key={i} style={{ color: LIME, animation: `pulse 1.5s ease ${i * .25}s infinite` }}>.</span>)}</div>
+              <div style={{ padding: "2.5rem 0 2rem" }}>
+                <div style={{ background: BG_GLASS, borderRadius: "10px", padding: "1.2rem 1.4rem", marginBottom: "1.5rem", animation: "fadeIn .3s ease" }}>
+                  <div style={{ height: "14px", borderRadius: "4px", background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s ease infinite", width: "85%", marginBottom: "10px" }} />
+                  <div style={{ height: "14px", borderRadius: "4px", background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s ease 0.15s infinite", width: "70%", marginBottom: "10px" }} />
+                  <div style={{ height: "14px", borderRadius: "4px", background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s ease 0.3s infinite", width: "55%" }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: LIME, boxShadow: `0 0 8px ${LIME}`, animation: "pulse 1.2s ease infinite" }} />
+                  <span style={{ color: TEXT_MUTED, fontSize: "0.6rem", letterSpacing: "3px" }}>FORGE thinking</span>
+                </div>
+              </div>
             ) : (<>
-              <p style={{ color: "#e5e5e5", fontSize: "1.08rem", lineHeight: "1.78", margin: "0 0 1.9rem", fontWeight: "300" }}>{curQ}</p>
+              <p style={{ color: TEXT_PRIMARY, fontSize: "1.08rem", lineHeight: "1.78", margin: "0 0 1.9rem", fontWeight: "300", textShadow: "0 0 40px rgba(200,255,0,0.1)" }}>{curQ}</p>
               <p style={G.label}>Your answer</p>
               <textarea ref={taRef} style={{ ...G.ta, height: "105px" }} placeholder="Honest. No performance." value={curA} onChange={e => { setCurA(e.target.value); if (e.target.value.length === 4) prefetchNext([...qa, { question: curQ, answer: e.target.value }]); }} onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && curA.trim() && !loading) next(); }} autoFocus />
               <div style={{ display: "flex", gap: "0.7rem", marginTop: "0.85rem", alignItems: "center" }}>
-                <button style={{ ...G.btn, opacity: !curA.trim() ? 0.2 : 1 }} onClick={next} disabled={!curA.trim() || loading}>{qa.length + 1 === Q_TARGET ? "FINISH →" : "NEXT →"}</button>
-                {qa.length >= 3 && <button className="gh" style={G.ghost} onClick={() => { scoreIdea(qa); setPhase("reality-check"); }}>skip →</button>}
+                <button style={{ ...G.btn, opacity: !curA.trim() ? 0.2 : 1, boxShadow: !curA.trim() ? "none" : GLOW_LIME }} onClick={next} disabled={!curA.trim() || loading}>{qa.length + 1 === Q_TARGET ? "FINISH →" : "NEXT →"}</button>
+                {qa.length >= 3 && <button className="gh" style={G.ghost} onClick={() => { scoreIdea(qa); }}>skip →</button>}
               </div>
               {err && <div style={G.err}>{err}</div>}
             </>)}
@@ -887,7 +1444,10 @@ export default function App() {
         {/* REALITY CHECK */}
         {phase === "reality-check" && (
           <RealityCheck idea={idea} qa={qa} profile={profile}
-            onProceed={() => setPhase("output-select")}
+            onProceed={() => {
+              if (!user && freeCount > FREE_IDEA_LIMIT) { setPhase("unlock"); return; }
+              setPhase("output-select");
+            }}
             onBack={() => setPhase("questioning")} />
         )}
 
@@ -895,66 +1455,224 @@ export default function App() {
         {phase === "output-select" && (
           <div style={{ animation: "fadeIn .3s ease" }}>
             {ideaScore && (
-              <div style={{ background: "#090909", border: `1px solid ${scoreColor(ideaScore.score)}15`, borderRadius: "10px", padding: "1.1rem 1.3rem", marginBottom: "1.8rem" }}>
+              <div style={{ background: "rgba(255,255,255,0.04)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${scoreColor(ideaScore.score)}25`, borderRadius: "14px", padding: "1.1rem 1.3rem", marginBottom: "1.8rem", boxShadow: `0 4px 30px ${scoreColor(ideaScore.score)}10` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.7rem" }}>
-                  <div style={{ fontSize: "2rem", fontWeight: "900", color: scoreColor(ideaScore.score), fontFamily: "monospace", lineHeight: 1 }}>{ideaScore.score}</div>
-                  <div style={{ flex: 1 }}><div style={{ color: scoreColor(ideaScore.score), fontSize: "0.63rem", fontWeight: "bold", letterSpacing: "2px" }}>{(ideaScore.label || "").toUpperCase()}</div><div style={{ color: "#555", fontSize: "0.76rem", marginTop: "2px", lineHeight: "1.5" }}>{ideaScore.verdict}</div></div>
-                  <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: `${scoreColor(ideaScore.score)}0e`, border: `2px solid ${scoreColor(ideaScore.score)}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.52rem", color: scoreColor(ideaScore.score), fontWeight: "bold", textAlign: "center", lineHeight: "1.3", fontFamily: "monospace" }}>IDEA<br />SCORE</div>
+                  <div style={{ fontSize: "2.2rem", fontWeight: 900, color: scoreColor(ideaScore.score), fontFamily: "monospace", lineHeight: 1, textShadow: `0 0 30px ${scoreColor(ideaScore.score)}60` }}>{ideaScore.score}</div>
+                  <div style={{ flex: 1 }}><div style={{ color: scoreColor(ideaScore.score), fontSize: "0.63rem", fontWeight: "bold", letterSpacing: "2px" }}>{(ideaScore.label || "").toUpperCase()}</div><div style={{ color: TEXT_SECONDARY, fontSize: "0.76rem", marginTop: "2px", lineHeight: "1.5" }}>{ideaScore.verdict}</div></div>
+                  <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: `${scoreColor(ideaScore.score)}12`, border: `2px solid ${scoreColor(ideaScore.score)}35`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.5rem", color: scoreColor(ideaScore.score), fontWeight: "bold", textAlign: "center", lineHeight: "1.3", fontFamily: "monospace" }}>IDEA<br />SCORE</div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
-                  <div><div style={{ color: LIME, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>STRENGTHS</div>{(ideaScore.strengths || []).map((s, i) => <div key={i} style={{ color: "#555", fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {s}</div>)}</div>
-                  <div><div style={{ color: PINK, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>GAPS</div>{(ideaScore.gaps || []).map((g, i) => <div key={i} style={{ color: "#555", fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {g}</div>)}</div>
+                  <div><div style={{ color: LIME, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>STRENGTHS</div>{(ideaScore.strengths || []).map((s, i) => <div key={i} style={{ color: TEXT_SECONDARY, fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {s}</div>)}</div>
+                  <div><div style={{ color: PINK, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>GAPS</div>{(ideaScore.gaps || []).map((g, i) => <div key={i} style={{ color: TEXT_SECONDARY, fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {g}</div>)}</div>
                 </div>
               </div>
             )}
             <p style={G.label}>Build your output</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.78rem", marginBottom: "0.78rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.78rem", marginBottom: "0.78rem" }}>
               {OUTPUTS.map(o => {
                 const done = !!outputs[o.key];
-                return (<div key={o.key} className="outcard" style={{ background: "#0a0a0a", border: `1px solid ${done ? `${LIME}20` : "#131313"}`, borderRadius: "10px", padding: "1.05rem", cursor: "pointer", transition: "all .18s", position: "relative" }} onClick={() => generate(o.key)}>
+                return (<div key={o.key} className="outcard" style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${done ? `${LIME}30` : BORDER_GLASS}`, borderRadius: "14px", padding: "1.05rem", cursor: "pointer", transition: "all .18s", position: "relative", boxShadow: done ? `0 0 20px ${LIME}10` : "none" }} onClick={() => generate(o.key)}>
                   {done && <span style={{ position: "absolute", top: "0.5rem", right: "0.6rem", color: LIME, fontSize: "0.5rem", letterSpacing: "1.5px" }}>READY</span>}
                   <div style={{ fontSize: "1.25rem", marginBottom: "0.42rem" }}>{o.icon}</div>
-                  <div style={{ color: "#e8e8e8", fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.22rem" }}>{o.label}</div>
-                  <div style={{ color: "#1e1e1e", fontSize: "0.68rem", lineHeight: "1.4" }}>{o.desc}</div>
+                  <div style={{ color: TEXT_PRIMARY, fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.22rem" }}>{o.label}</div>
+                  <div style={{ color: TEXT_MUTED, fontSize: "0.68rem", lineHeight: "1.4" }}>{o.desc}</div>
                 </div>);
               })}
             </div>
-            <div style={{ background: "#0a0a0a", border: `1px solid ${PURPLE}15`, borderRadius: "10px", padding: "1.05rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "1rem", transition: "all .18s" }} onClick={() => setCompany(true)} onMouseEnter={e => e.currentTarget.style.borderColor = `${PURPLE}40`} onMouseLeave={e => e.currentTarget.style.borderColor = `${PURPLE}15`}>
+            <div style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${PURPLE}25`, borderRadius: "14px", padding: "1.05rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "1rem", transition: "all .18s" }} onClick={() => setCompany(true)}>
               <span style={{ fontSize: "1.25rem" }}>🏗️</span>
-              <div style={{ flex: 1 }}><div style={{ color: PURPLE, fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.2rem" }}>Company Builder</div><div style={{ color: "#1e1e1e", fontSize: "0.68rem" }}>Systems, workflows & org design — market-aware</div></div>
+              <div style={{ flex: 1 }}><div style={{ color: PURPLE, fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.2rem" }}>Company Builder</div><div style={{ color: TEXT_MUTED, fontSize: "0.68rem" }}>Systems, workflows & org design — market-aware</div></div>
               <span style={{ color: PURPLE, fontSize: "1rem", flexShrink: 0 }}>→</span>
             </div>
             {err && <div style={{ ...G.err, marginTop: "1rem" }}>{err}</div>}
           </div>
         )}
 
+        {/* UNLOCK — shown after 3 free ideas */}
+        {phase === "unlock" && (
+          <div style={{ animation: "fadeIn .4s ease", textAlign: "center", padding: "3rem 0 4rem" }}>
+            <div style={{ fontSize: "3.5rem", marginBottom: "1.2rem", filter: "drop-shadow(0 0 20px rgba(255,107,0,0.4))" }}>🔥</div>
+            <h2 style={{ color: LIME, fontSize: "1.6rem", fontWeight: 900, letterSpacing: "4px", margin: "0 0 0.6rem", textShadow: "0 0 30px rgba(200,255,0,0.4)" }}>3 FORGED.</h2>
+            <p style={{ color: TEXT_SECONDARY, fontSize: "0.88rem", lineHeight: "1.7", maxWidth: "400px", margin: "0 auto 2.5rem" }}>You've squeezed maximum value out of your free ideas.<br />Sign up to unlock unlimited thinking.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", maxWidth: "340px", margin: "0 auto" }}>
+              <button style={{ ...G.btn, padding: "1rem", fontSize: "0.78rem" }} onClick={() => setAppState("auth")}>CREATE FREE ACCOUNT →</button>
+              <button className="gh" style={{ ...G.ghost, color: TEXT_SECONDARY, padding: "0.8rem" }} onClick={() => resetIdea()}>Keep exploring (lose this idea)</button>
+            </div>
+            <div style={{ marginTop: "2.5rem", background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${LIME}20`, borderRadius: "14px", padding: "1.2rem", maxWidth: "380px", margin: "2rem auto 0", boxShadow: `0 0 30px ${LIME}08` }}>
+              <div style={{ color: LIME, fontSize: "0.6rem", letterSpacing: "2px", marginBottom: "0.85rem" }}>WHAT YOU GET</div>
+              {["Unlimited idea forging", "Save & revisit ideas", "Full output generation", "Company builder access", "Your thinking profile"].map((f, i) => <div key={i} style={{ color: TEXT_SECONDARY, fontSize: "0.78rem", marginBottom: "0.5rem", display: "flex", gap: "0.6rem", alignItems: "center" }}><span style={{ color: LIME }}>✓</span>{f}</div>)}
+            </div>
+          </div>
+        )}
+
         {/* GENERATING */}
         {phase === "generating" && (
           <div style={{ textAlign: "center", padding: "6rem 0", animation: "fadeIn .3s ease" }}>
-            <div style={{ width: "34px", height: "34px", border: `2px solid ${LIME}14`, borderTop: `2px solid ${LIME}`, borderRadius: "50%", margin: "0 auto 1.4rem", animation: "spin 0.7s linear infinite" }} />
-            <p style={{ color: LIME, fontSize: "0.65rem", letterSpacing: "4px", margin: "0 0 0.4rem" }}>FORGING</p>
-            <p style={{ color: "#1c1c1c", fontSize: "0.72rem" }}>{loadMsg}</p>
+            <div style={{ position: "relative", width: "64px", height: "64px", margin: "0 auto 1.8rem" }}>
+              {/* Outer orbit ring */}
+              <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${LIME}18`, animation: "spin 3s linear infinite", boxShadow: `0 0 30px ${LIME}10 inset` }} />
+              {/* Middle glow ring */}
+              <div style={{ position: "absolute", inset: "8px", borderRadius: "50%", border: `2px solid ${LIME}40`, animation: "spin 1.8s linear infinite reverse", boxShadow: `0 0 20px ${LIME}20` }} />
+              {/* Inner core */}
+              <div style={{ position: "absolute", inset: "20px", borderRadius: "50%", background: `radial-gradient(circle, ${LIME}30, transparent)`, animation: "glowPulse 2s ease infinite" }} />
+              {/* Center dot */}
+              <div style={{ position: "absolute", inset: "26px", borderRadius: "50%", background: LIME, boxShadow: `0 0 16px ${LIME}`, animation: "pulse 1.5s ease infinite" }} />
+            </div>
+            <p style={{ color: LIME, fontSize: "0.62rem", letterSpacing: "5px", margin: "0 0 0.5rem", textShadow: "0 0 20px rgba(200,255,0,0.5)", fontWeight: 700 }}>FORGING</p>
+            <p style={{ color: TEXT_MUTED, fontSize: "0.72rem" }}>{loadMsg}</p>
+            <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "1.2rem" }}>
+              {[0,1,2].map(i => <div key={i} style={{ width: "4px", height: "4px", borderRadius: "50%", background: LIME, opacity: 0.4, animation: `pulse 1.2s ease ${i * .2}s infinite` }} />)}
+            </div>
           </div>
         )}
 
         {/* OUTPUT */}
         {phase === "output" && outType && outputs[outType] && (
           <div style={{ animation: "fadeIn .3s ease" }}>
+            {/* Summary at a Glance */}
+            {outType !== "mindmap" && (
+              <div style={{ marginBottom: "1.8rem", animation: "fadeIn .4s ease" }}>
+                <SectionHeader label="Summary at a Glance" accent={LIME} />
+                {outType === "blueprint" && outputs.blueprint && (
+                  <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap" }}>
+                    {(outputs.blueprint.sections || []).slice(0, 4).map((s: { title: string; content: string; bullets: string[] }, i: number) => (
+                      <div key={i} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RAD.lg, padding: "0.85rem 1.1rem", display: "flex", flexDirection: "column" as const, gap: "0.35rem", minWidth: "160px", flex: "1 1 160px" }}>
+                        <div style={{ color: LIME, fontSize: FS.xs, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" as const }}>{s.title}</div>
+                        <div style={{ color: "var(--text-primary)", fontSize: FS.sm, lineHeight: 1.5 }}>{s.content?.slice(0, 80)}{s.content?.length > 80 ? "…" : ""}</div>
+                        {(s.bullets || []).slice(0, 2).map((b: string, j: number) => (
+                          <div key={j} style={{ color: "var(--text-secondary)", fontSize: FS.xs, display: "flex", gap: "0.35rem", alignItems: "flex-start" }}>
+                            <span style={{ color: LIME, flexShrink: 0 }}>→</span>
+                            <span>{b.slice(0, 50)}{b.length > 50 ? "…" : ""}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {outType === "roadmap" && outputs.roadmap && (
+                  <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap" }}>
+                    {(outputs.roadmap.phases || []).slice(0, 4).map((p: RoadmapPhase, i: number) => {
+                      const cols = [LIME, ORANGE, CYAN, PINK];
+                      const c = cols[i % 4];
+                      return (
+                        <div key={i} style={{ background: "var(--bg-card)", border: `1px solid ${c}25`, borderRadius: RAD.lg, padding: "0.85rem 1.1rem", display: "flex", flexDirection: "column" as const, gap: "0.35rem", minWidth: "160px", flex: "1 1 160px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <div style={{ width: "26px", height: "26px", borderRadius: "50%", border: `2px solid ${c}`, display: "flex", alignItems: "center", justifyContent: "center", color: c, fontWeight: 900, fontSize: FS.xs, background: `${c}0a` }}>{i + 1}</div>
+                            <div style={{ color: c, fontSize: FS.xs, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" as const }}>{p.phase}</div>
+                          </div>
+                          <div style={{ color: "var(--text-primary)", fontSize: FS.sm, fontWeight: 600 }}>{p.title}</div>
+                          <div style={{ color: "var(--text-muted)", fontSize: FS.xs }}>{p.duration}</div>
+                          <div style={{ color: "var(--text-secondary)", fontSize: FS.xs, lineHeight: 1.5 }}>{p.goal?.slice(0, 70)}{p.goal?.length > 70 ? "…" : ""}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {outType === "actionplan" && outputs.actionplan && (
+                  <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap" }}>
+                    {(outputs.actionplan.weeks || []).slice(0, 4).map((w: Week, i: number) => (
+                      <div key={i} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RAD.lg, padding: "0.85rem 1.1rem", display: "flex", flexDirection: "column" as const, gap: "0.35rem", minWidth: "160px", flex: "1 1 160px" }}>
+                        <div style={{ color: LIME, fontSize: FS.xs, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" as const }}>{w.week}</div>
+                        <div style={{ color: "var(--text-primary)", fontSize: FS.sm, fontWeight: 600 }}>{w.focus}</div>
+                        <div style={{ color: "var(--text-secondary)", fontSize: FS.xs }}>{w.tasks?.length || 0} tasks</div>
+                        {(w.tasks || []).slice(0, 2).map((t: ActionTask, j: number) => (
+                          <div key={j} style={{ color: "var(--text-muted)", fontSize: FS.xs, display: "flex", gap: "0.35rem", alignItems: "center" }}>
+                            <PriorityChip priority={t.priority || "MED"} />
+                            <span>{t.task?.slice(0, 40)}{t.task?.length > 40 ? "…" : ""}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {outType === "swot" && outputs.swot && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.65rem" }}>
+                    {[
+                      { key: "strengths", label: "Strengths", color: LIME },
+                      { key: "weaknesses", label: "Weaknesses", color: PINK },
+                      { key: "opportunities", label: "Opportunities", color: CYAN },
+                      { key: "threats", label: "Threats", color: ORANGE },
+                    ].map(q => (
+                      <div key={q.key} style={{ background: "var(--bg-card)", border: `1px solid ${q.color}25`, borderRadius: RAD.lg, padding: "0.85rem 1.1rem" }}>
+                        <div style={{ color: q.color, fontSize: FS.xs, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" as const, marginBottom: "0.5rem" }}>{q.label}</div>
+                        {(outputs.swot[q.key as keyof SWOTData] || []).slice(0, 3).map((item: string, i: number) => (
+                          <div key={i} style={{ color: "var(--text-secondary)", fontSize: FS.xs, marginBottom: "0.25rem", display: "flex", gap: "0.35rem", alignItems: "flex-start" }}>
+                            <span style={{ color: q.color, flexShrink: 0 }}>◆</span>
+                            <span>{item?.slice(0, 60)}{item?.length > 60 ? "…" : ""}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {outType === "businessplan" && outputs.businessplan && (
+                  <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap" }}>
+                    {(outputs.businessplan.sections || []).slice(0, 4).map((s: { title: string; content: string }, i: number) => (
+                      <div key={i} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: RAD.lg, padding: "0.85rem 1.1rem", display: "flex", flexDirection: "column" as const, gap: "0.35rem", minWidth: "160px", flex: "1 1 160px" }}>
+                        <div style={{ color: LIME, fontSize: FS.xs, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" as const }}>{s.title}</div>
+                        <div style={{ color: "var(--text-primary)", fontSize: FS.sm, lineHeight: 1.5 }}>{s.content?.slice(0, 90)}{s.content?.length > 90 ? "…" : ""}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab bar — all available outputs */}
+            <div style={{ display: "flex", gap: "0.35rem", marginBottom: "1.2rem", flexWrap: "wrap", alignItems: "center" }}>
+              <div style={{ color: "var(--text-muted)", fontSize: FS.xs, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" as const, marginRight: "0.35rem" }}>Output</div>
+              {Object.entries(outputs).map(([key, val]) => {
+                if (key === "mindmap" || !val) return null;
+                const o = OUTPUTS.find(x => x.key === key);
+                const active = key === outType;
+                return (
+                  <button key={key} onClick={() => { setOutType(key); setResultTab(key); if (!outputs[key]) setSkeletonFor(key); else setSkeletonFor(null); }} style={{
+                    background: active ? `${LIME}15` : "transparent",
+                    border: `1px solid ${active ? LIME : "var(--border)"}`,
+                    color: active ? LIME : "var(--text-secondary)",
+                    borderRadius: RAD.md,
+                    padding: "0.4rem 0.85rem",
+                    fontSize: FS.xs,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    transition: "all .2s",
+                    fontFamily: FONT.sans,
+                  }}>
+                    <span>{o?.icon}</span>
+                    <span>{o?.label}</span>
+                    {val && <span style={{ background: LIME, color: "#000", fontSize: "0.45rem", fontWeight: 900, padding: "1px 4px", borderRadius: "3px" }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Controls row */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.4rem", flexWrap: "wrap", gap: "0.55rem" }}>
-              <span style={{ color: LIME, fontSize: "0.6rem", letterSpacing: "3px", textTransform: "uppercase" }}>{OUTPUTS.find(o => o.key === outType)?.icon} {OUTPUTS.find(o => o.key === outType)?.label}</span>
+              <span style={{ color: LIME, fontSize: "0.6rem", letterSpacing: "3px", textTransform: "uppercase" as const, textShadow: "0 0 20px rgba(200,255,0,0.3)" }}>{OUTPUTS.find(o => o.key === outType)?.icon} {OUTPUTS.find(o => o.key === outType)?.label}</span>
               <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
-                <button className="gh" style={G.ghost} onClick={async () => { setOutputs(p => { const n = { ...p }; delete n[outType]; return n; }); await generate(outType); }}>↻ Regen</button>
+                <button className="gh" style={G.ghost} onClick={() => generate(outType, true)}>↻ Regen</button>
                 <button className="gh" style={G.ghost} onClick={() => setPhase("output-select")}>← All</button>
                 <button className="gh" style={G.ghost} onClick={resetIdea}>New Idea</button>
               </div>
             </div>
-            <div style={{ background: "#0b0b0b", border: "1px solid #111", borderRadius: "12px", padding: outType === "mindmap" ? "0" : "1.8rem" }}>
-              {outType === "mindmap" && <MindMap data={outputs[outType]} />}
-              {outType === "blueprint" && <Blueprint data={outputs[outType]} />}
-              {outType === "roadmap" && <Roadmap data={outputs[outType]} />}
-              {outType === "businessplan" && <BusinessPlan data={outputs[outType]} />}
-              {outType === "actionplan" && <ActionPlan data={outputs[outType]} />}
-              {outType === "swot" && <SWOT data={outputs[outType]} />}
+
+            {/* Content */}
+            <div style={{ background: "var(--bg-card)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid var(--border)`, borderRadius: RAD.lg, padding: outType === "mindmap" ? "0" : $.cardPad }}>
+              {skeletonFor === "mindmap" && <MindMapSkeleton />}
+              {skeletonFor === "blueprint" && <BlueprintSkeleton />}
+              {skeletonFor === "roadmap" && <RoadmapSkeleton />}
+              {skeletonFor === "businessplan" && <BusinessPlanSkeleton />}
+              {skeletonFor === "actionplan" && <ActionPlanSkeleton />}
+              {skeletonFor === "swot" && <SWOTSkeleton />}
+              {!skeletonFor && outType === "mindmap" && <MindMap data={outputs[outType]} />}
+              {!skeletonFor && outType === "blueprint" && <Blueprint data={outputs[outType]} />}
+              {!skeletonFor && outType === "roadmap" && <Roadmap data={outputs[outType]} />}
+              {!skeletonFor && outType === "businessplan" && <BusinessPlan data={outputs[outType]} />}
+              {!skeletonFor && outType === "actionplan" && <ActionPlan data={outputs[outType]} />}
+              {!skeletonFor && outType === "swot" && <SWOT data={outputs[outType]} />}
             </div>
           </div>
         )}

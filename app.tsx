@@ -1,8 +1,11 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-
 // Free AI via Groq - https://console.groq.com/
 // Get your free API key there, no credit card needed
+declare global {
+  interface Window { storage?: any }
+}
+export {};
 const GROQ_API_KEY = "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"; // <-- Put your key here
 const API = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL = "llama-3.3-70b-versatile"; // Free, fast, excellent quality
@@ -14,24 +17,31 @@ const PINK = "#FF3C78";
 const CYAN = "#00D4FF";
 const BRANCH_COLORS = [LIME, ORANGE, CYAN, PINK, PURPLE, "#00FFB2"];
 
+// --- Types ---
+type AnyObj = { [k: string]: any };
+interface Profile { name?: string; age?: number; city?: string; country?: string; market?: string; stage?: string; techLevel?: string; funding?: string; constraints?: string; targetCustomer?: string; industry?: string; bio?: string }
+interface User { uid: string; name?: string }
+interface QA { question: string; answer: string }
+
+
 // ── STORAGE ───────────────────────────────────────────────
 const store = {
-  async get(k) {
+  async get(k: string): Promise<any> {
     try { const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; } catch { return null; }
   },
-  async set(k, v) {
+  async set(k: string, v: any): Promise<void> {
     try { await window.storage.set(k, JSON.stringify(v)); } catch {}
   },
-  async del(k) {
+  async del(k: string): Promise<void> {
     try { await window.storage.delete(k); } catch {}
   },
-  async list(prefix) {
+  async list(prefix?: string): Promise<any[]> {
     try { const r = await window.storage.list(prefix); return r?.keys || []; } catch { return []; }
   }
 };
 
 // ── API ───────────────────────────────────────────────────
-async function aiStream(system, user, onChunk, maxTok = 1400) {
+async function aiStream(system: string, user: string, onChunk: (chunk: string) => void, maxTok = 1400): Promise<string> {
   if (!GROQ_API_KEY) throw new Error("Missing GROQ_API_KEY - add your key at line 5");
   const res = await fetch(API, {
     method: "POST",
@@ -53,7 +63,7 @@ async function aiStream(system, user, onChunk, maxTok = 1400) {
     const err = await res.text();
     throw new Error(`API ${res.status}: ${err}`);
   }
-  const reader = res.body.getReader();
+  const reader = res.body!.getReader();
   const dec = new TextDecoder();
   let full = "";
   while (true) {
@@ -73,7 +83,7 @@ async function aiStream(system, user, onChunk, maxTok = 1400) {
   return full;
 }
 
-async function ai(sys, usr, asJSON = false, maxTok = 1400, retries = 2) {
+async function ai(sys: string, usr: string, asJSON = false, maxTok = 1400, retries = 2): Promise<any> {
   for (let i = 0; i <= retries; i++) {
     try {
       let full = "";
@@ -90,7 +100,7 @@ async function ai(sys, usr, asJSON = false, maxTok = 1400, retries = 2) {
 }
 
 // ── MARKDOWN ──────────────────────────────────────────────
-function Md({ text }) {
+function Md({ text }: { text?: string }) {
   return (
     <div style={{ fontFamily: "monospace" }}>
       {(text || "").split("\n").map((line, i) => {
@@ -111,7 +121,7 @@ function Md({ text }) {
 }
 
 // ── FOUNDER PROFILE HELPERS ───────────────────────────────
-function profileContext(p) {
+function profileContext(p: Profile | null) {
   if (!p) return "";
   return `FOUNDER PROFILE:
 Name: ${p.name} | Age: ${p.age} | Location: ${p.city}, ${p.country}
@@ -123,7 +133,7 @@ Industry: ${p.industry}
 One sentence about them: ${p.bio}`;
 }
 
-function marketContext(p) {
+function marketContext(p: Profile | null) {
   if (!p) return "";
   const isAfrica = ["Tanzania","Kenya","Uganda","Nigeria","Ghana","Rwanda","Ethiopia","Zambia","Mozambique","Senegal","Côte d'Ivoire","South Africa"].some(c => p.country?.includes(c));
   const isEmerging = isAfrica || ["India","Bangladesh","Pakistan","Indonesia","Philippines","Vietnam","Cambodia"].some(c => p.country?.includes(c));
@@ -133,7 +143,7 @@ function marketContext(p) {
 }
 
 // ── AUTH SCREENS ──────────────────────────────────────────
-function AuthScreen({ onAuth }) {
+function AuthScreen({ onAuth }: any) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ email: "", password: "", name: "" });
   const [loading, setLoading] = useState(false);
@@ -162,7 +172,7 @@ function AuthScreen({ onAuth }) {
     setLoading(false);
   };
 
-  const inp = { width: "100%", background: "#0b0b0b", border: "1px solid #1e1e1e", borderRadius: "7px", color: "#f0f0f0", fontSize: "0.9rem", padding: "0.85rem 1rem", outline: "none", fontFamily: "monospace", boxSizing: "border-box" };
+  const inp: React.CSSProperties = { width: "100%", background: "#0b0b0b", border: "1px solid #1e1e1e", borderRadius: "7px", color: "#f0f0f0", fontSize: "0.9rem", padding: "0.85rem 1rem", outline: "none", fontFamily: "monospace", boxSizing: "border-box" };
 
   return (
     <div style={{ minHeight: "100vh", background: "#070707", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", fontFamily: "monospace" }}>
@@ -190,7 +200,7 @@ function AuthScreen({ onAuth }) {
 }
 
 // ── ONBOARDING ────────────────────────────────────────────
-function Onboarding({ user, onDone }) {
+function Onboarding({ user, onDone }: any) {
   const steps = [
     { key: "age", label: "How old are you?", placeholder: "e.g. 19", type: "input" },
     { key: "city", label: "What city are you in?", placeholder: "e.g. Dodoma", type: "input" },
@@ -248,7 +258,7 @@ function Onboarding({ user, onDone }) {
         )}
         {cur.type === "choice" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-            {cur.options.map(o => (
+            {(cur.options || []).map((o: any) => (
               <button key={o} onClick={() => setVal(o)} style={{ background: val === o ? `${LIME}15` : "#0a0a0a", border: `1px solid ${val === o ? LIME : "#1e1e1e"}`, borderRadius: "8px", padding: "0.85rem 1.1rem", color: val === o ? LIME : "#888", fontFamily: "monospace", fontSize: "0.85rem", cursor: "pointer", textAlign: "left", transition: "all .15s" }}>{o}</button>
             ))}
           </div>
@@ -263,7 +273,7 @@ function Onboarding({ user, onDone }) {
 }
 
 // ── PROFILE PANEL ─────────────────────────────────────────
-function ProfilePanel({ profile, user, onUpdate, onLogout, onClose }) {
+function ProfilePanel({ profile, user, onUpdate, onLogout, onClose }: any) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ ...profile });
   const fields = [
@@ -307,7 +317,7 @@ function ProfilePanel({ profile, user, onUpdate, onLogout, onClose }) {
               <div style={{ color: "#252525", fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: "0.3rem", fontFamily: "monospace" }}>{f.label}</div>
               {editing
                 ? <textarea style={{ width: "100%", background: "#0b0b0b", border: "1px solid #1e1e1e", borderRadius: "6px", color: "#f0f0f0", fontSize: "0.83rem", padding: "0.6rem 0.8rem", outline: "none", fontFamily: "monospace", lineHeight: "1.6", minHeight: "42px", resize: "vertical", boxSizing: "border-box" }}
-                  value={draft[f.key] || ""} onChange={e => setDraft(d => ({ ...d, [f.key]: e.target.value }))} />
+                  value={draft[f.key] || ""} onChange={e => setDraft((d: any) => ({ ...d, [f.key]: e.target.value }))} />
                 : <div style={{ color: "#888", fontSize: "0.83rem", lineHeight: "1.6", fontFamily: "monospace" }}>{profile[f.key] || "—"}</div>
               }
             </div>
@@ -320,9 +330,9 @@ function ProfilePanel({ profile, user, onUpdate, onLogout, onClose }) {
 }
 
 // ── IDEA HISTORY PANEL ────────────────────────────────────
-function HistoryPanel({ uid, onLoad, onClose }) {
-  const [ideas, setIdeas] = useState([]);
-  const [loading, setLoading] = useState(true);
+function HistoryPanel({ uid, onLoad, onClose }: any) {
+  const [ideas, setIdeas] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     (async () => {
@@ -333,9 +343,9 @@ function HistoryPanel({ uid, onLoad, onClose }) {
     })();
   }, [uid]);
 
-  const del = async (id) => {
+  const del = async (id: any) => {
     await store.del(`idea:${uid}:${id}`);
-    setIdeas(p => p.filter(x => x.id !== id));
+    setIdeas(p => p.filter((x: any) => x.id !== id));
   };
 
   return (
@@ -368,17 +378,17 @@ function HistoryPanel({ uid, onLoad, onClose }) {
 }
 
 // ── REALITY CHECK ─────────────────────────────────────────
-function RealityCheck({ idea, qa, profile, onProceed, onBack }) {
-  const [result, setResult] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [talked, setTalked] = useState(null);
+function RealityCheck({ idea, qa, profile, onProceed, onBack }: any) {
+  const [result, setResult] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [talked, setTalked] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const sys = `You are FORGE REALITY CHECK — a brutal, honest advisor for early-stage founders.
 Analyse this idea against the founder's specific constraints. Be direct. No sugarcoating.
 Structure: ## Feasibility Score (X/10)\n## Can You Actually Build This?\n## Market Reality Check\n## Your Unfair Advantage\n## The Single Biggest Risk\n## Verdict`;
-      const prompt = `${profileContext(profile)}\n${marketContext(profile)}\n\nIdea: "${idea}"\n\nFounder's thinking:\n${qa.map((x, i) => `Q${i + 1}: ${x.question}\nA${i + 1}: ${x.answer}`).join("\n\n")}\n\nGive a reality check tailored to THIS specific founder's constraints and location.`;
+      const prompt = `${profileContext(profile)}\n${marketContext(profile)}\n\nIdea: "${idea}"\n\nFounder's thinking:\n${qa.map((x: any, i: number) => `Q${i + 1}: ${x.question}\nA${i + 1}: ${x.answer}`).join("\n\n")}\n\nGive a reality check tailored to THIS specific founder's constraints and location.`;
       await aiStream(sys, prompt, chunk => setResult(chunk), 1000);
       setLoading(false);
     })();
@@ -417,46 +427,46 @@ Structure: ## Feasibility Score (X/10)\n## Can You Actually Build This?\n## Mark
 }
 
 // ── MIND MAP ──────────────────────────────────────────────
-function MindMap({ data }) {
-  const svgRef = useRef(null);
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [hovered, setHovered] = useState(null);
+function MindMap({ data }: any) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [transform, setTransform] = useState<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
+  const [dragging, setDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const W = 1100, H = 720, cx = W / 2, cy = H / 2, bR = 210, nR = 125;
   const branches = (data.branches || []).slice(0, 6);
   const N = branches.length;
 
-  const wrap = (txt, max) => {
+  const wrap = (txt: any, max: any) => {
     if (!txt) return [""];
     const words = String(txt).split(" "); const lines = []; let cur = "";
     for (const w of words) { if ((cur + " " + w).trim().length > max) { lines.push(cur.trim()); cur = w; } else cur = (cur + " " + w).trim(); }
     if (cur) lines.push(cur); return lines.slice(0, 2);
   };
 
-  const positions = useMemo(() => branches.map((b, i) => {
+  const positions = useMemo(() => branches.map((b: any, i: number) => {
     const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
     const bx = cx + Math.cos(angle) * bR, by = cy + Math.sin(angle) * bR;
-    const nodes = (b.nodes || []).slice(0, 4).map((node, j) => {
+    const nodes = (b.nodes || []).slice(0, 4).map((node: any, j: number) => {
       const nAngle = angle + (j - ((b.nodes || []).slice(0, 4).length - 1) / 2) * 0.44;
       return { node, nAngle, nx: bx + Math.cos(nAngle) * nR, ny: by + Math.sin(nAngle) * nR };
     });
     return { angle, bx, by, nodes };
   }), [data]);
 
-  const onMouseDown = e => { if (e.button !== 0) return; setDragging(true); setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y }); };
-  const onMouseMove = e => { if (!dragging || !dragStart) return; setTransform(t => ({ ...t, x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })); };
+  const onMouseDown = (e: any) => { if (e.button !== 0) setDragging(true); setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y }); };
+  const onMouseMove = (e: any) => { if (!dragging || !dragStart) return; setTransform(t => ({ ...t, x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })); };
   const onMouseUp = () => { setDragging(false); setDragStart(null); };
-  const onWheel = useCallback(e => { e.preventDefault(); setTransform(t => ({ ...t, scale: Math.min(Math.max(t.scale * (e.deltaY > 0 ? 0.92 : 1.09), 0.3), 3) })); }, []);
+  const onWheel = useCallback((e: any) => { e.preventDefault(); setTransform(t => ({ ...t, scale: Math.min(Math.max(t.scale * (e.deltaY > 0 ? 0.92 : 1.09), 0.3), 3) })); }, []);
 
-  useEffect(() => { const el = svgRef.current; if (!el) return; el.addEventListener("wheel", onWheel, { passive: false }); return () => el.removeEventListener("wheel", onWheel); }, []);
+  useEffect(() => { const el = svgRef.current; if (el) el.addEventListener("wheel", onWheel, { passive: false }); return () => el?.removeEventListener("wheel", onWheel); }, []);
 
   return (
     <div style={{ position: "relative", background: "#060606", borderRadius: "12px", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: "10px", right: "10px", display: "flex", gap: "5px", zIndex: 10 }}>
-        {[["＋", () => setTransform(t => ({ ...t, scale: Math.min(t.scale * 1.2, 3) }))], ["－", () => setTransform(t => ({ ...t, scale: Math.max(t.scale * 0.83, 0.3) }))], ["⊡", () => setTransform({ x: 0, y: 0, scale: 0.75 })], ["↺", () => setTransform({ x: 0, y: 0, scale: 1 })]].map(([l, a], i) => (
-          <button key={i} onClick={a} style={{ background: "#111", border: "1px solid #222", color: "#555", borderRadius: "4px", width: "26px", height: "26px", cursor: "pointer", fontSize: "0.8rem", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace", transition: "all .15s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = LIME; e.currentTarget.style.color = LIME; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#222"; e.currentTarget.style.color = "#555"; }}>{l}</button>
+        {[["＋", () => setTransform(t => ({ ...t, scale: Math.min(t.scale * 1.2, 3) }))], ["－", () => setTransform(t => ({ ...t, scale: Math.max(t.scale * 0.83, 0.3) }))], ["⊡", () => setTransform({ x: 0, y: 0, scale: 0.75 })], ["↺", () => setTransform({ x: 0, y: 0, scale: 1 })]].map(([l, a]: any[], i: number) => (
+          <button key={i} onClick={typeof a === 'function' ? a : undefined} style={{ background: "#111", border: "1px solid #222", color: "#555", borderRadius: "4px", width: "26px", height: "26px", cursor: "pointer", fontSize: "0.8rem", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace", transition: "all .15s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = LIME; e.currentTarget.style.color = LIME; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#222"; e.currentTarget.style.color = "#555"; }}>{l}</button>
         ))}
       </div>
       {selected && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "#0d0d0d", border: `1px solid ${LIME}25`, borderRadius: "6px", padding: "5px 10px", zIndex: 10 }}><div style={{ color: LIME, fontSize: "0.55rem", letterSpacing: "2px", marginBottom: "1px" }}>SELECTED</div><div style={{ color: "#ccc", fontSize: "0.72rem", fontFamily: "monospace" }}>{selected}</div></div>}
@@ -464,21 +474,21 @@ function MindMap({ data }) {
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", cursor: dragging ? "grabbing" : "grab", userSelect: "none" }} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
         <defs>
           <filter id="gl"><feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-          {branches.map((b, i) => { const c = b.color || BRANCH_COLORS[i % 6]; return (<radialGradient key={i} id={`rg${i}`} cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor={c} stopOpacity="0.22" /><stop offset="100%" stopColor={c} stopOpacity="0.03" /></radialGradient>); })}
+          {branches.map((b: any, i: number) => { const c = b.color || BRANCH_COLORS[i % 6]; return (<radialGradient key={i} id={`rg${i}`} cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor={c} stopOpacity="0.22" /><stop offset="100%" stopColor={c} stopOpacity="0.08" /></radialGradient>); })}
         </defs>
         <rect width={W} height={H} fill="#060606" />
         <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`} style={{ transformOrigin: `${cx}px ${cy}px` }}>
           <circle cx={cx} cy={cy} r={88} fill={LIME} opacity="0.05" filter="url(#gl)" />
           <circle cx={cx} cy={cy} r={70} fill={LIME} />
           {wrap(data.center || "IDEA", 11).map((ln, i, arr) => (<text key={i} x={cx} y={cy + (i - (arr.length - 1) / 2) * 17} textAnchor="middle" dominantBaseline="middle" fontSize="13" fontWeight="900" fill="#000" fontFamily="monospace">{ln}</text>))}
-          {positions.map((pos, i) => {
+          {positions.map((pos: any, i: number) => {
             const b = branches[i]; const color = b.color || BRANCH_COLORS[i % 6];
             const bKey = b.label || `b${i}`; const active = selected === bKey || hovered === bKey;
             return (<g key={i}>
               <line x1={cx + Math.cos(pos.angle) * 72} y1={cy + Math.sin(pos.angle) * 72} x2={pos.bx} y2={pos.by} stroke={color} strokeWidth={active ? 2.5 : 1.8} opacity={active ? 0.9 : 0.5} style={{ transition: "all .25s" }} />
               <ellipse cx={pos.bx} cy={pos.by} rx={active ? 64 : 60} ry={active ? 32 : 29} fill={`url(#rg${i})`} stroke={color} strokeWidth={active ? 2.2 : 1.5} style={{ transition: "all .25s", cursor: "pointer", filter: active ? `drop-shadow(0 0 6px ${color})` : "none" }} onClick={() => setSelected(selected === bKey ? null : bKey)} onMouseEnter={() => setHovered(bKey)} onMouseLeave={() => setHovered(null)} />
               {wrap(b.label || "", 13).map((ln, li, arr) => (<text key={li} x={pos.bx} y={pos.by + (li - (arr.length - 1) / 2) * 14} textAnchor="middle" dominantBaseline="middle" fontSize={active ? 12 : 11} fontWeight="bold" fill={color} fontFamily="monospace" style={{ pointerEvents: "none", transition: "all .2s" }}>{ln}</text>))}
-              {pos.nodes.map(({ node, nAngle, nx, ny }, j) => {
+              {pos.nodes.map(({ node, nAngle, nx, ny }: any, j: number) => {
                 const nk = String(node || ""); const nActive = selected === nk || hovered === nk || selected === bKey;
                 const ls = wrap(nk, 13); const bh = ls.length * 17 + 12;
                 return (<g key={j}>
@@ -496,39 +506,39 @@ function MindMap({ data }) {
 }
 
 // ── OUTPUT RENDERERS (compact) ────────────────────────────
-function Blueprint({ data }) {
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 5px" }}>{data.title}</h2><p style={{ color: "#444", fontSize: "0.84rem", margin: "0 0 1.8rem", fontStyle: "italic", lineHeight: "1.65" }}>{data.vision}</p>{(data.sections || []).map((s, i) => (<div key={i} style={{ marginBottom: "1.4rem", paddingLeft: "1rem", borderLeft: `2px solid ${LIME}22` }}><div style={{ color: LIME, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.3rem" }}>{s.title}</div><p style={{ color: "#c8c8c8", fontSize: "0.84rem", lineHeight: "1.72", margin: "0 0 0.4rem" }}>{s.content}</p>{(s.bullets || []).map((b, j) => (<div key={j} style={{ color: "#555", fontSize: "0.77rem", marginBottom: "0.18rem", paddingLeft: "0.75rem" }}>→ {b}</div>))}</div>))}</div>);
+function Blueprint({ data }: any) {
+  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 5px" }}>{data.title}</h2><p style={{ color: "#444", fontSize: "0.84rem", margin: "0 0 1.8rem", fontStyle: "italic", lineHeight: "1.65" }}>{data.vision}</p>{(data.sections || []).map((s: any, i: number) => (<div key={i} style={{ marginBottom: "1.4rem", paddingLeft: "1rem", borderLeft: `2px solid ${LIME}22` }}><div style={{ color: LIME, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.3rem" }}>{s.title}</div><p style={{ color: "#c8c8c8", fontSize: "0.84rem", lineHeight: "1.72", margin: "0 0 0.4rem" }}>{s.content}</p>{(s.bullets || []).map((b: any, j: number) => (<div key={j} style={{ color: "#555", fontSize: "0.77rem", marginBottom: "0.18rem", paddingLeft: "0.75rem" }}>→ {b}</div>))}</div>))}</div>);
 }
 
-function Roadmap({ data }) {
+function Roadmap({ data }: any) {
   const cols = [LIME, ORANGE, CYAN, PINK];
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 1.8rem" }}>{data.title}</h2>{(data.phases || []).map((p, i) => { const c = cols[i % 4]; return (<div key={i} style={{ display: "flex", gap: "1.3rem", marginBottom: "2rem" }}><div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "48px" }}><div style={{ width: "44px", height: "44px", borderRadius: "50%", border: `2px solid ${c}`, display: "flex", alignItems: "center", justifyContent: "center", color: c, fontWeight: "900", fontSize: "1rem", background: `${c}0a` }}>{i + 1}</div><div style={{ color: c, fontSize: "0.57rem", marginTop: "4px", textAlign: "center" }}>{p.duration}</div></div><div style={{ flex: 1, borderLeft: `1px solid ${c}18`, paddingLeft: "1.3rem" }}><div style={{ color: c, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "2.5px" }}>{p.phase}</div><div style={{ color: "#f0f0f0", fontSize: "0.95rem", fontWeight: "bold", margin: "3px 0 7px" }}>{p.title}</div><div style={{ color: "#888", fontSize: "0.81rem", marginBottom: "0.7rem", lineHeight: "1.6" }}>{p.goal}</div>{(p.milestones || []).map((m, j) => <div key={j} style={{ color: "#444", fontSize: "0.76rem", marginBottom: "0.18rem" }}>✓ {m}</div>)}{(p.kpis || []).length > 0 && <div style={{ marginTop: "0.55rem", display: "flex", flexWrap: "wrap", gap: "4px" }}>{p.kpis.map((k, j) => <span key={j} style={{ background: `${c}0f`, border: `1px solid ${c}28`, color: c, fontSize: "0.63rem", padding: "2px 7px", borderRadius: "3px" }}>{k}</span>)}</div>}</div></div>); })}</div>);
+  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 1.8rem" }}>{data.title}</h2>{(data.phases || []).map((p: any, i: number) => { const c = cols[i % 4]; return (<div key={i} style={{ display: "flex", gap: "1.3rem", marginBottom: "2rem" }}><div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "48px" }}><div style={{ width: "44px", height: "44px", borderRadius: "50%", border: `2px solid ${c}`, display: "flex", alignItems: "center", justifyContent: "center", color: c, fontWeight: "900", fontSize: "1rem", background: `${c}0a` }}>{i + 1}</div><div style={{ color: c, fontSize: "0.57rem", marginTop: "4px", textAlign: "center" }}>{p.duration}</div></div><div style={{ flex: 1, borderLeft: `1px solid ${c}18`, paddingLeft: "1.3rem" }}><div style={{ color: c, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "2.5px" }}>{p.phase}</div><div style={{ color: "#f0f0f0", fontSize: "0.95rem", fontWeight: "bold", margin: "3px 0 7px" }}>{p.title}</div><div style={{ color: "#888", fontSize: "0.81rem", marginBottom: "0.7rem", lineHeight: "1.6" }}>{p.goal}</div>{(p.milestones || []).map((m: any, j: number) => <div key={j} style={{ color: "#444", fontSize: "0.76rem", marginBottom: "0.18rem" }}>✓ {m}</div>)}{(p.kpis || []).length > 0 && <div style={{ marginTop: "0.55rem", display: "flex", flexWrap: "wrap", gap: "4px" }}>{p.kpis.map((k: any, j: number) => <span key={j} style={{ background: `${c}0f`, border: `1px solid ${c}28`, color: c, fontSize: "0.63rem", padding: "2px 7px", borderRadius: "3px" }}>{k}</span>)}</div>}</div></div>); })}</div>);
 }
 
-function BusinessPlan({ data }) {
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 4px" }}>{data.title}</h2><p style={{ color: ORANGE, fontSize: "0.88rem", margin: "0 0 1.6rem", fontStyle: "italic" }}>{data.oneliner}</p><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>{(data.sections || []).map((s, i, arr) => (<div key={i} style={{ background: "#0a0a0a", border: "1px solid #161616", borderRadius: "8px", padding: "0.85rem", gridColumn: (i === 0 || i === arr.length - 1) ? "1/-1" : "auto" }}><div style={{ color: LIME, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: "0.4rem" }}>{s.title}</div><p style={{ color: "#bbb", fontSize: "0.81rem", lineHeight: "1.68", margin: 0 }}>{s.content}</p></div>))}</div></div>);
+function BusinessPlan({ data }: any) {
+  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 4px" }}>{data.title}</h2><p style={{ color: ORANGE, fontSize: "0.88rem", margin: "0 0 1.6rem", fontStyle: "italic" }}>{data.oneliner}</p><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>{(data.sections || []).map((s: any, i: number, arr: any[]) => (<div key={i} style={{ background: "#0a0a0a", border: "1px solid #161616", borderRadius: "8px", padding: "0.85rem", gridColumn: (i === 0 || i === arr.length - 1) ? "1/-1" : "auto" }}><div style={{ color: LIME, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2.5px", marginBottom: "0.4rem" }}>{s.title}</div><p style={{ color: "#bbb", fontSize: "0.81rem", lineHeight: "1.68", margin: 0 }}>{s.content}</p></div>))}</div></div>);
 }
 
-function ActionPlan({ data }) {
-  const pc = { HIGH: PINK, MED: ORANGE, LOW: LIME };
-  const [done, setDone] = useState({});
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 1.8rem" }}>{data.title}</h2>{(data.weeks || []).map((w, i) => (<div key={i} style={{ marginBottom: "1.8rem" }}><div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.6rem", paddingBottom: "0.4rem", borderBottom: "1px solid #111" }}><span style={{ color: LIME, fontWeight: "bold", fontSize: "0.76rem" }}>{w.week}</span><span style={{ color: "#222", fontSize: "0.68rem" }}>— {w.focus}</span></div>{(w.tasks || []).map((t, j) => { const p = (t.priority || "MED").toUpperCase().slice(0, 3); const c = pc[p] || "#888"; const k = `${i}-${j}`; const isDone = done[k]; return (<div key={j} onClick={() => setDone(d => ({ ...d, [k]: !d[k] }))} style={{ display: "flex", gap: "0.8rem", alignItems: "flex-start", background: "#0a0a0a", border: `1px solid ${isDone ? LIME + "18" : "#111"}`, borderRadius: "6px", padding: "0.65rem 0.85rem", marginBottom: "0.32rem", cursor: "pointer", transition: "all .18s", opacity: isDone ? 0.45 : 1 }}><span style={{ color: c, fontSize: "0.56rem", fontWeight: "bold", border: `1px solid ${c}`, padding: "2px 5px", borderRadius: "3px", minWidth: "26px", textAlign: "center", flexShrink: 0, marginTop: "2px" }}>{p}</span><div style={{ flex: 1 }}><div style={{ color: isDone ? "#555" : "#eee", fontSize: "0.82rem", marginBottom: "0.15rem", textDecoration: isDone ? "line-through" : "none" }}>{t.task}</div><div style={{ color: "#252525", fontSize: "0.71rem" }}>→ {t.outcome}</div></div><span style={{ color: isDone ? LIME : "#1a1a1a", fontSize: "0.88rem", flexShrink: 0 }}>{isDone ? "✓" : "○"}</span></div>); })}</div>))}</div>);
+function ActionPlan({ data }: any) {
+  const pc: any = { HIGH: PINK, MED: ORANGE, LOW: LIME };
+  const [done, setDone] = useState<Record<string, boolean>>({});
+  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 1.8rem" }}>{data.title}</h2>{(data.weeks || []).map((w: any, i: number) => (<div key={i} style={{ marginBottom: "1.8rem" }}><div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.6rem", paddingBottom: "0.4rem", borderBottom: "1px solid #111" }}><span style={{ color: LIME, fontWeight: "bold", fontSize: "0.76rem" }}>{w.week}</span><span style={{ color: "#222", fontSize: "0.68rem" }}>— {w.focus}</span></div>{(w.tasks || []).map((t: any, j: number) => { const p = (t.priority || "MED").toUpperCase().slice(0, 3); const c = pc[p] || "#888"; const k = `${i}-${j}`; const isDone = done[k]; return (<div key={j} onClick={() => setDone((d: any) => ({ ...d, [k]: !d[k] }))} style={{ display: "flex", gap: "0.8rem", alignItems: "flex-start", background: "#0a0a0a", border: `1px solid ${isDone ? LIME + "18" : "#111"}`, borderRadius: "6px", padding: "0.65rem 0.85rem", marginBottom: "0.32rem", cursor: "pointer", transition: "all .18s", opacity: isDone ? 0.45 : 1 }}><span style={{ color: c, fontSize: "0.56rem", fontWeight: "bold", border: `1px solid ${c}`, padding: "2px 5px", borderRadius: "3px", minWidth: "26px", textAlign: "center", flexShrink: 0, marginTop: "2px" }}>{p}</span><div style={{ flex: 1 }}><div style={{ color: isDone ? "#555" : "#eee", fontSize: "0.82rem", marginBottom: "0.15rem", textDecoration: isDone ? "line-through" : "none" }}>{t.task}</div><div style={{ color: "#252525", fontSize: "0.71rem" }}>→ {t.outcome}</div></div><span style={{ color: isDone ? LIME : "#1a1a1a", fontSize: "0.88rem", flexShrink: 0 }}>{isDone ? "✓" : "○"}</span></div>); })}</div>))}</div>);
 }
 
-function SWOT({ data }) {
+function SWOT({ data }: any) {
   const quads = [{ key: "strengths", label: "Strengths", color: LIME, icon: "↑" }, { key: "weaknesses", label: "Weaknesses", color: PINK, icon: "↓" }, { key: "opportunities", label: "Opportunities", color: CYAN, icon: "→" }, { key: "threats", label: "Threats", color: ORANGE, icon: "⚠" }];
-  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 4px" }}>{data.title}</h2><p style={{ color: "#333", fontSize: "0.78rem", margin: "0 0 1.4rem" }}>{data.summary}</p><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>{quads.map(q => (<div key={q.key} style={{ background: "#0a0a0a", border: `1px solid ${q.color}18`, borderRadius: "10px", padding: "1rem" }}><div style={{ color: q.color, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.65rem" }}>{q.icon} {q.label}</div>{(data[q.key] || []).map((item, i) => (<div key={i} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.4rem" }}><span style={{ color: q.color, fontSize: "0.66rem", marginTop: "2px", flexShrink: 0 }}>◆</span><span style={{ color: "#bbb", fontSize: "0.79rem", lineHeight: "1.58" }}>{item}</span></div>))}</div>))}</div>{data.strategic_insight && <div style={{ marginTop: "0.9rem", background: `${LIME}06`, border: `1px solid ${LIME}15`, borderRadius: "8px", padding: "0.9rem" }}><div style={{ color: LIME, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.3rem" }}>Strategic Read</div><p style={{ color: "#ccc", fontSize: "0.81rem", lineHeight: "1.68", margin: 0 }}>{data.strategic_insight}</p></div>}</div>);
+  return (<div style={{ fontFamily: "monospace" }}><h2 style={{ color: LIME, fontSize: "1.3rem", margin: "0 0 4px" }}>{data.title}</h2><p style={{ color: "#333", fontSize: "0.78rem", margin: "0 0 1.4rem" }}>{data.summary}</p><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>{quads.map((q: any) => (<div key={q.key} style={{ background: "#0a0a0a", border: `1px solid ${q.color}18`, borderRadius: "10px", padding: "1rem" }}><div style={{ color: q.color, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.65rem" }}>{q.icon} {q.label}</div>{(data[q.key] || []).map((item: any, i: number) => (<div key={i} style={{ display: "flex", gap: "0.5rem", marginBottom: "0.4rem" }}><span style={{ color: q.color, fontSize: "0.66rem", marginTop: "2px", flexShrink: 0 }}>◆</span><span style={{ color: "#bbb", fontSize: "0.79rem", lineHeight: "1.58" }}>{item}</span></div>))}</div>))}</div>{data.strategic_insight && <div style={{ marginTop: "0.9rem", background: `${LIME}06`, border: `1px solid ${LIME}15`, borderRadius: "8px", padding: "0.9rem" }}><div style={{ color: LIME, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "3px", marginBottom: "0.3rem" }}>Strategic Read</div><p style={{ color: "#ccc", fontSize: "0.81rem", lineHeight: "1.68", margin: 0 }}>{data.strategic_insight}</p></div>}</div>);
 }
 
 // ── COMPANY BUILDER & INTEL (compact) ─────────────────────
-function CompanyBuilder({ idea, qaCtx, profile, onClose }) {
-  const [step, setStep] = useState("pick");
-  const [mode, setMode] = useState(null);
-  const [bg, setBg] = useState("");
-  const [result, setResult] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
-  const scrollRef = useRef(null);
+function CompanyBuilder({ idea, qaCtx, profile, onClose }: any) {
+  const [step, setStep] = useState<string>("pick");
+  const [mode, setMode] = useState<string | null>(null);
+  const [bg, setBg] = useState<string>("");
+  const [result, setResult] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [done, setDone] = useState<boolean>(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [result]);
 
   const build = async () => {
@@ -536,7 +546,7 @@ function CompanyBuilder({ idea, qaCtx, profile, onClose }) {
     const modeCtx = mode === "scratch" ? "Starting from zero." : `Insider background: "${bg}"`;
     const sys = `You are FORGE SYSTEMS. McKinsey meets YC. Specific, ruthless, no filler. ## headers. → bullets.`;
     const prompt = `${profileContext(profile)}\n${marketContext(profile)}\n\nIdea:"${idea}"\n${qaCtx}\n\nContext:${modeCtx}\n\n## 1. Company Architecture\n## 2. Core Systems\n## 3. Workflow Design\n## 4. Hiring Sequence\n## 5. Revenue Operations\n## 6. Tech Stack (exact tools for this market)\n## 7. Growth Levers\n## 8. 90-Day Plan\n## 9. Critical Failure Points`;
-    try { await aiStream(sys, prompt, chunk => setResult(chunk), 1600); } catch (e) { setResult(`Error: ${e.message}`); }
+    try { await aiStream(sys, prompt, (chunk: string) => setResult(chunk), 1600); } catch (e: unknown) { setResult(`Error: ${e instanceof Error ? e.message : String(e)}`); }
     setLoading(false); setDone(true);
   };
 
@@ -576,16 +586,16 @@ function CompanyBuilder({ idea, qaCtx, profile, onClose }) {
   );
 }
 
-function IntelPanel({ idea, profile, onClose }) {
-  const [msgs, setMsgs] = useState([{ role: "assistant", content: `## FORGE INTEL\n\nLive AI research. Ask me:\n\n→ Market size and real numbers\n→ Competitors in this space\n→ Regulations for your market\n→ Funding landscape\n→ Tech options for your constraints` }]);
-  const [inp, setInp] = useState("");
-  const [busy, setBusy] = useState(false);
-  const bottomRef = useRef(null);
-  const taRef = useRef(null);
-  const histRef = useRef([]);
+function IntelPanel({ idea, profile, onClose }: any) {
+  const [msgs, setMsgs] = useState<any[]>([{ role: "assistant", content: `## FORGE INTEL\n\nLive AI research. Ask me:\n\n→ Market size and real numbers\n→ Competitors in this space\n→ Regulations for your market\n→ Funding landscape\n→ Tech options for your constraints` }]);
+  const [inp, setInp] = useState<string>("");
+  const [busy, setBusy] = useState<boolean>(false);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const histRef = useRef<any[]>([]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
-  const send = useCallback(async (text) => {
+  const send = useCallback(async (text?: string) => {
     const q = (text || inp).trim(); if (!q || busy) return;
     setInp("");
     const userMsg = { role: "user", content: q };
@@ -598,7 +608,7 @@ function IntelPanel({ idea, profile, onClose }) {
       let reply = "";
       await aiStream(sys, `Context:\n${ctx.slice(0, -q.length - 10)}\n\nLatest: ${q}`, chunk => { reply = chunk; setMsgs(prev => { const n = [...prev]; n[n.length - 1] = { role: "assistant", content: chunk }; return n; }); }, 900);
       histRef.current = [...histRef.current, { role: "assistant", content: reply }];
-    } catch (e) { setMsgs(prev => { const n = [...prev]; n[n.length - 1] = { role: "assistant", content: `Error: ${e.message}` }; return n; }); }
+    } catch (e: unknown) { setMsgs(prev => { const n = [...prev]; n[n.length - 1] = { role: "assistant", content: `Error: ${e instanceof Error ? e.message : String(e)}` }; return n; }); }
     setBusy(false); setTimeout(() => taRef.current?.focus(), 80);
   }, [inp, busy, idea, profile]);
 
@@ -634,12 +644,12 @@ function IntelPanel({ idea, profile, onClose }) {
 
 // ── OUTPUT CONFIGS ────────────────────────────────────────
 const CONFIGS = {
-  mindmap: { sys: `JSON only. {"center":"2-3 words","branches":[{"label":"2 words","color":"#hex","nodes":["short","short","short","short"]}]} 5-6 branches,3-4 nodes,max 4 words,vivid hex colors. Start with { end with }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  blueprint: { sys: `JSON only. {"title":"...","vision":"sentence","sections":[{"title":"NAME","content":"2-3 sentences","bullets":["pt","pt","pt"]}]} 7 sections: Core Concept,Problem & Solution,Target Market,Unique Advantage,Key Assumptions,Critical Risks,Success Metrics. Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  roadmap: { sys: `JSON only. {"title":"...","phases":[{"phase":"Phase 1","title":"...","duration":"X weeks","goal":"...","milestones":["...","...","..."],"kpis":["...","..."]}]} 4 phases: Foundation,Launch,Scale,Dominate. Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  businessplan: { sys: `JSON only. {"title":"...","oneliner":"pitch","sections":[{"title":"NAME","content":"content"}]} 10 sections: Problem,Solution,Market Size,Business Model,Revenue Streams,Go-To-Market,Competitive Moat,Team Requirements,Financial Projections,Next Steps. Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  actionplan: { sys: `JSON only. {"title":"...","weeks":[{"week":"Week 1","focus":"goal","tasks":[{"task":"action","priority":"HIGH","outcome":"result"}]}]} Priority: HIGH MED or LOW. 4 weeks,4-5 tasks. Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
-  swot: { sys: `JSON only. {"title":"...","summary":"sentence","strengths":["...","...","...","..."],"weaknesses":["...","...","...","..."],"opportunities":["...","...","...","..."],"threats":["...","...","...","..."],"strategic_insight":"2-3 sentences"} Start { end }`, usr: (idea, ctx, p) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
+  mindmap: { sys: `JSON only. {"center":"2-3 words","branches":[{"label":"2 words","color":"#hex","nodes":["short","short","short","short"]}]} 5-6 branches,3-4 nodes,max 4 words,vivid hex colors. Start with { end with }`, usr: (idea: any, ctx: any, p: any) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
+  blueprint: { sys: `JSON only. {"title":"...","vision":"sentence","sections":[{"title":"NAME","content":"2-3 sentences","bullets":["pt","pt","pt"]}]} 7 sections: Core Concept,Problem & Solution,Target Market,Unique Advantage,Key Assumptions,Critical Risks,Success Metrics. Start { end }`, usr: (idea: any, ctx: any, p: any) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
+  roadmap: { sys: `JSON only. {"title":"...","phases":[{"phase":"Phase 1","title":"...","duration":"X weeks","goal":"...","milestones":["...","...","..."],"kpis":["...","..."]}]} 4 phases: Foundation,Launch,Scale,Dominate. Start { end }`, usr: (idea: any, ctx: any, p: any) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
+  businessplan: { sys: `JSON only. {"title":"...","oneliner":"pitch","sections":[{"title":"NAME","content":"content"}]} 10 sections: Problem,Solution,Market Size,Business Model,Revenue Streams,Go-To-Market,Competitive Moat,Team Requirements,Financial Projections,Next Steps. Start { end }`, usr: (idea: any, ctx: any, p: any) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
+  actionplan: { sys: `JSON only. {"title":"...","weeks":[{"week":"Week 1","focus":"goal","tasks":[{"task":"action","priority":"HIGH","outcome":"result"}]}]} Priority: HIGH MED or LOW. 4 weeks,4-5 tasks. Start { end }`, usr: (idea: any, ctx: any, p: any) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
+  swot: { sys: `JSON only. {"title":"...","summary":"sentence","strengths":["...","...","...","..."],"weaknesses":["...","...","...","..."],"opportunities":["...","...","...","..."],"threats":["...","...","...","..."],"strategic_insight":"2-3 sentences"} Start { end }`, usr: (idea: any, ctx: any, p: any) => `${profileContext(p)}\n${marketContext(p)}\nIdea:"${idea}"\n${ctx}` },
 };
 
 const OUTPUTS = [
@@ -652,32 +662,111 @@ const OUTPUTS = [
 ];
 
 const Q_SYS = `You are FORGE — ruthless thinking partner for serious founders. ONE question per round. Rotate: Creative→Critical→Strategic→Logical. No preamble. Return ONLY the raw question.`;
-const ctxStr = pairs => pairs.map((x, i) => `Q${i + 1}: ${x.question}\nA${i + 1}: ${x.answer}`).join("\n\n");
+const ctxStr = (pairs: any[]) => pairs.map((x: any, i: number) => `Q${i + 1}: ${x.question}\nA${i + 1}: ${x.answer}`).join("\n\n");
+
+// ── DOWNLOAD HELPER ──────────────────────────────────────
+function downloadText(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function formatOutputForDownload(data: any, type: string): string {
+  const label = OUTPUTS.find(o => o.key === type)?.label || type;
+  let md = `# ${label}\n\n`;
+  if (type === "mindmap") {
+    md += `**Center:** ${data.center || "IDEA"}\n\n`;
+    (data.branches || []).forEach((b: any) => {
+      md += `## ${b.label || ""}\n`;
+      (b.nodes || []).forEach((n: any) => { md += `- ${n}\n`; });
+      md += "\n";
+    });
+  } else if (type === "blueprint") {
+    md += `**${data.title || ""}**\n*${data.vision || ""}*\n\n`;
+    (data.sections || []).forEach((s: any) => {
+      md += `## ${s.title || ""}\n${s.content || ""}\n`;
+      (s.bullets || []).forEach((b: any) => { md += `- ${b}\n`; });
+      md += "\n";
+    });
+  } else if (type === "roadmap") {
+    md += `**${data.title || ""}**\n\n`;
+    (data.phases || []).forEach((p: any, i: number) => {
+      md += `## Phase ${i + 1}: ${p.phase || ""} (${p.duration || ""})\n`;
+      md += `**${p.title || ""}**\n${p.goal || ""}\n`;
+      (p.milestones || []).forEach((m: any) => { md += `- ${m}\n`; });
+      if (p.kpis?.length) md += `\nKPIs: ${p.kpis.join(", ")}\n`;
+      md += "\n";
+    });
+  } else if (type === "businessplan") {
+    md += `**${data.title || ""}**\n*${data.oneliner || ""}*\n\n`;
+    (data.sections || []).forEach((s: any) => {
+      md += `## ${s.title || ""}\n${s.content || ""}\n\n`;
+    });
+  } else if (type === "actionplan") {
+    md += `**${data.title || ""}**\n\n`;
+    (data.weeks || []).forEach((w: any) => {
+      md += `## ${w.week || ""}: ${w.focus || ""}\n`;
+      (w.tasks || []).forEach((t: any) => {
+        md += `- [${t.priority === "HIGH" ? "!" : t.priority === "MED" ? "~" : "-"}] ${t.task} → ${t.outcome}\n`;
+      });
+      md += "\n";
+    });
+  } else if (type === "swot") {
+    md += `**${data.title || ""}**\n*${data.summary || ""}*\n\n`;
+    [["strengths", "Strengths"], ["weaknesses", "Weaknesses"], ["opportunities", "Opportunities"], ["threats", "Threats"]].forEach(([key, label]) => {
+      md += `## ${label}\n`;
+      (data[key] || []).forEach((item: any) => { md += `- ${item}\n`; });
+      md += "\n";
+    });
+    if (data.strategic_insight) md += `## Strategic Insight\n${data.strategic_insight}\n\n`;
+  } else {
+    md += JSON.stringify(data, null, 2) + "\n\n";
+  }
+  return md;
+}
+
+function buildCompleteDoc(ideaText: string, qaPairs: QA[], profile: Profile | null, outputs: Record<string, any>) {
+  const pCtx = profile ? `Founder: ${profile.name || ""} | ${profile.bio || ""}` : "";
+  const ideaSection = `## RAW IDEA\n\n${ideaText || ""}\n\n`;
+  const qaSection = qaPairs.length > 0
+    ? `## Q&A SESSION\n\n${qaPairs.map((x, i) => `**Q${i + 1}:** ${x.question}\n**A${i + 1}:** ${x.answer}`).join("\n\n")}\n\n`
+    : "";
+  const outputsSection = Object.keys(outputs).length > 0
+    ? Object.entries(outputs).map(([type, data]) => formatOutputForDownload(data, type)).join("---\n\n")
+    : "";
+  return `# FORGE — Idea Engine for Founders\n\n${pCtx ? `${pCtx}\n\n` : ""}${ideaSection}${qaSection}${outputsSection}`;
+}
 
 // ── MAIN APP ──────────────────────────────────────────────
 export default function App() {
-  const [appState, setAppState] = useState("loading"); // loading | auth | onboarding | app
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [phase, setPhase] = useState("ignition");
-  const [idea, setIdea] = useState("");
-  const [qa, setQa] = useState([]);
-  const [curQ, setCurQ] = useState("");
-  const [curA, setCurA] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [loadMsg, setLoadMsg] = useState("");
-  const [outType, setOutType] = useState(null);
-  const [outputs, setOutputs] = useState({});
-  const [err, setErr] = useState("");
-  const [hov, setHov] = useState(null);
-  const [intel, setIntel] = useState(false);
-  const [company, setCompany] = useState(false);
-  const [ideaScore, setIdeaScore] = useState(null);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [currentIdeaId, setCurrentIdeaId] = useState(null);
-  const taRef = useRef(null);
-  const prefetchRef = useRef({});
+  const [appState, setAppState] = useState<string>("loading"); // loading | auth | onboarding | app
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [phase, setPhase] = useState<string>("ignition");
+  const [idea, setIdea] = useState<string>("");
+  const [qa, setQa] = useState<QA[]>([]);
+  const [curQ, setCurQ] = useState<string>("");
+  const [curA, setCurA] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loadMsg, setLoadMsg] = useState<string>("");
+  const [outType, setOutType] = useState<string | null>(null);
+  const [outputs, setOutputs] = useState<Record<string, any>>({});
+  const [err, setErr] = useState<string>("");
+  const [hov, setHov] = useState<any>(null);
+  const [intel, setIntel] = useState<boolean>(false);
+  const [company, setCompany] = useState<boolean>(false);
+  const [ideaScore, setIdeaScore] = useState<any | null>(null);
+  const [showProfile, setShowProfile] = useState<boolean>(false);
+  const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [currentIdeaId, setCurrentIdeaId] = useState<string | null>(null);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const prefetchRef = useRef<Record<string, Promise<any>> | Record<string, any>>({});
 
   // load session on mount
   useEffect(() => {
@@ -693,7 +782,7 @@ export default function App() {
     })();
   }, []);
 
-  const handleAuth = async (u, isNew) => {
+  const handleAuth = async (u: any, isNew: boolean) => {
     setUser(u);
     if (isNew) { setAppState("onboarding"); return; }
     const p = await store.get(`profile:${u.uid}`);
@@ -701,7 +790,7 @@ export default function App() {
     setProfile(p); setAppState("app");
   };
 
-  const handleOnboarding = (p) => { setProfile(p); setAppState("app"); };
+  const handleOnboarding = (p: Profile) => { setProfile(p); setAppState("app"); };
 
   const logout = async () => {
     await store.del("session");
@@ -709,18 +798,18 @@ export default function App() {
     resetIdea();
   };
 
-  const scoreIdea = useCallback(async (pairs) => {
+  const scoreIdea = useCallback(async (pairs: QA[]) => {
     try {
       const s = await ai(`Score this startup idea. JSON only, start with {: {"score":75,"label":"Solid","verdict":"brutal one sentence","strengths":["s1","s2"],"gaps":["g1","g2"]} Labels:Weak/Needs Work/Solid/Strong/Exceptional.`, `${profileContext(profile)}\nIdea:"${idea}"\n${ctxStr(pairs)}`, true, 400);
       setIdeaScore(s);
       // auto-save idea
       const id = currentIdeaId || Date.now().toString();
       setCurrentIdeaId(id);
-      await store.set(`idea:${user.uid}:${id}`, { id, text: idea, score: s.score, label: s.label, qa: pairs, savedAt: Date.now() });
+      if (user?.uid) await store.set(`idea:${user.uid}:${id}`, { id, text: idea, score: s.score, label: s.label, qa: pairs, savedAt: Date.now() });
     } catch {}
   }, [idea, profile, user, currentIdeaId]);
 
-  const prefetchNext = useCallback((updated) => {
+  const prefetchNext = useCallback((updated: QA[]) => {
     if (updated.length >= Q_TARGET) return;
     const styles = ["Creative", "Critical", "Strategic", "Logical"];
     const key = `q${updated.length + 1}`;
@@ -735,7 +824,7 @@ export default function App() {
     try {
       const q = await ai(Q_SYS, `${profileContext(profile)}\nIdea:"${idea}"\nQ1 of ${Q_TARGET}. Creative style. Most foundational: what they're ACTUALLY building, for WHOM, single reason it must exist NOW.`, false, 400);
       setCurQ(q); setPhase("questioning");
-    } catch (e) { setErr(e.message); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
     setLoading(false);
   };
 
@@ -753,24 +842,24 @@ export default function App() {
       delete prefetchRef.current[key];
       const q = cached || await ai(Q_SYS, `${profileContext(profile)}\nIdea:"${idea}"\n\n${ctxStr(updated)}\n\nQ${updated.length + 1} of ${Q_TARGET}: ${["Creative","Critical","Strategic","Logical"][updated.length % 4]} style. Biggest unexplored gap.`, false, 400);
       setCurQ(q);
-    } catch (e) { setErr(e.message); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : String(e)); }
     setLoading(false);
     setTimeout(() => taRef.current?.focus(), 60);
   };
 
-  const generate = async (type) => {
+  const generate = async (type: string) => {
     if (outputs[type]) { setOutType(type); setPhase("output"); return; }
     setOutType(type); setPhase("generating"); setErr("");
     setLoadMsg(`Forging ${OUTPUTS.find(o => o.key === type)?.label}…`);
-    const cfg = CONFIGS[type];
+    const cfg = CONFIGS[type as keyof typeof CONFIGS];
     try {
       const result = await ai(cfg.sys, cfg.usr(idea, ctxStr(qa), profile), true, 1400, 2);
       setOutputs(prev => ({ ...prev, [type]: result }));
       setPhase("output");
-    } catch (e) { setErr(`Failed: ${e.message}`); setPhase("output-select"); }
+    } catch (e: unknown) { setErr(`Failed: ${e instanceof Error ? e.message : String(e)}`); setPhase("output-select"); }
   };
 
-  const loadIdea = (saved) => {
+  const loadIdea = (saved: any) => {
     setIdea(saved.text); setQa(saved.qa || []);
     setIdeaScore(saved.score ? { score: saved.score, label: saved.label } : null);
     setCurrentIdeaId(saved.id); setOutputs({});
@@ -789,9 +878,9 @@ export default function App() {
   if (appState === "onboarding") return <Onboarding user={user} onDone={handleOnboarding} />;
 
   const showTools = phase !== "ignition";
-  const scoreColor = s => s >= 80 ? LIME : s >= 60 ? ORANGE : s >= 40 ? "#FFD700" : PINK;
+  const scoreColor = (s: number) => s >= 80 ? LIME : s >= 60 ? ORANGE : s >= 40 ? "#FFD700" : PINK;
 
-  const G = {
+  const G: Record<string, React.CSSProperties> = {
     app: { minHeight: "100vh", background: "#070707", color: "#f0f0f0", fontFamily: "monospace", display: "flex", flexDirection: "column", alignItems: "center", padding: "0 1.25rem" },
     wrap: { width: "100%", maxWidth: "820px", transition: "padding-right .3s" },
     label: { color: "#222", fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "3.5px", marginBottom: "0.65rem" },
@@ -821,8 +910,8 @@ export default function App() {
 
       {intel && <IntelPanel idea={idea} profile={profile} onClose={() => setIntel(false)} />}
       {company && <CompanyBuilder idea={idea} qaCtx={ctxStr(qa)} profile={profile} onClose={() => setCompany(false)} />}
-      {showProfile && <ProfilePanel profile={profile} user={user} onUpdate={p => setProfile(p)} onLogout={logout} onClose={() => setShowProfile(false)} />}
-      {showHistory && <HistoryPanel uid={user.uid} onLoad={loadIdea} onClose={() => setShowHistory(false)} />}
+      {showProfile && <ProfilePanel profile={profile} user={user} onUpdate={(p: any) => setProfile(p)} onLogout={logout} onClose={() => setShowProfile(false)} />}
+      {showHistory && user && <HistoryPanel uid={user.uid} onLoad={loadIdea} onClose={() => setShowHistory(false)} />}
 
       <div style={{ ...G.wrap, paddingRight: intel ? "440px" : "0" }}>
         {/* HEADER */}
@@ -895,21 +984,21 @@ export default function App() {
         {phase === "output-select" && (
           <div style={{ animation: "fadeIn .3s ease" }}>
             {ideaScore && (
-              <div style={{ background: "#090909", border: `1px solid ${scoreColor(ideaScore.score)}15`, borderRadius: "10px", padding: "1.1rem 1.3rem", marginBottom: "1.8rem" }}>
+              <div style={{ background: "#090909", border: `1px solid ${scoreColor(ideaScore.score ?? 0)}15`, borderRadius: "10px", padding: "1.1rem 1.3rem", marginBottom: "1.8rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.7rem" }}>
-                  <div style={{ fontSize: "2rem", fontWeight: "900", color: scoreColor(ideaScore.score), fontFamily: "monospace", lineHeight: 1 }}>{ideaScore.score}</div>
-                  <div style={{ flex: 1 }}><div style={{ color: scoreColor(ideaScore.score), fontSize: "0.63rem", fontWeight: "bold", letterSpacing: "2px" }}>{(ideaScore.label || "").toUpperCase()}</div><div style={{ color: "#555", fontSize: "0.76rem", marginTop: "2px", lineHeight: "1.5" }}>{ideaScore.verdict}</div></div>
-                  <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: `${scoreColor(ideaScore.score)}0e`, border: `2px solid ${scoreColor(ideaScore.score)}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.52rem", color: scoreColor(ideaScore.score), fontWeight: "bold", textAlign: "center", lineHeight: "1.3", fontFamily: "monospace" }}>IDEA<br />SCORE</div>
+                  <div style={{ fontSize: "2rem", fontWeight: "900", color: scoreColor(ideaScore.score ?? 0), fontFamily: "monospace", lineHeight: 1 }}>{ideaScore.score}</div>
+                  <div style={{ flex: 1 }}><div style={{ color: scoreColor(ideaScore.score ?? 0), fontSize: "0.63rem", fontWeight: "bold", letterSpacing: "2px" }}>{(ideaScore.label || "").toUpperCase()}</div><div style={{ color: "#555", fontSize: "0.76rem", marginTop: "2px", lineHeight: "1.5" }}>{ideaScore.verdict}</div></div>
+                  <div style={{ width: "46px", height: "46px", borderRadius: "50%", background: `${scoreColor(ideaScore.score ?? 0)}0e`, border: `2px solid ${scoreColor(ideaScore.score ?? 0)}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.52rem", color: scoreColor(ideaScore.score ?? 0), fontWeight: "bold", textAlign: "center", lineHeight: "1.3", fontFamily: "monospace" }}>IDEA<br />SCORE</div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
-                  <div><div style={{ color: LIME, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>STRENGTHS</div>{(ideaScore.strengths || []).map((s, i) => <div key={i} style={{ color: "#555", fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {s}</div>)}</div>
-                  <div><div style={{ color: PINK, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>GAPS</div>{(ideaScore.gaps || []).map((g, i) => <div key={i} style={{ color: "#555", fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {g}</div>)}</div>
+                  <div><div style={{ color: LIME, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>STRENGTHS</div>{(ideaScore.strengths || []).map((s: any, i: number) => <div key={i} style={{ color: "#555", fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {s}</div>)}</div>
+                  <div><div style={{ color: PINK, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>GAPS</div>{(ideaScore.gaps || []).map((g: any, i: number) => <div key={i} style={{ color: "#555", fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {g}</div>)}</div>
                 </div>
               </div>
             )}
             <p style={G.label}>Build your output</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.78rem", marginBottom: "0.78rem" }}>
-              {OUTPUTS.map(o => {
+              {OUTPUTS.map((o: any) => {
                 const done = !!outputs[o.key];
                 return (<div key={o.key} className="outcard" style={{ background: "#0a0a0a", border: `1px solid ${done ? `${LIME}20` : "#131313"}`, borderRadius: "10px", padding: "1.05rem", cursor: "pointer", transition: "all .18s", position: "relative" }} onClick={() => generate(o.key)}>
                   {done && <span style={{ position: "absolute", top: "0.5rem", right: "0.6rem", color: LIME, fontSize: "0.5rem", letterSpacing: "1.5px" }}>READY</span>}
@@ -924,6 +1013,13 @@ export default function App() {
               <div style={{ flex: 1 }}><div style={{ color: PURPLE, fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.2rem" }}>Company Builder</div><div style={{ color: "#1e1e1e", fontSize: "0.68rem" }}>Systems, workflows & org design — market-aware</div></div>
               <span style={{ color: PURPLE, fontSize: "1rem", flexShrink: 0 }}>→</span>
             </div>
+            {Object.keys(outputs).length > 0 && (
+              <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center" }}>
+                <button className="gh" style={{ ...G.ghost, color: LIME, borderColor: `${LIME}30` }} onClick={() => downloadText("forge-complete.md", buildCompleteDoc(idea, qa, profile, outputs))}>
+                  ⬇ Download All ({Object.keys(outputs).length})
+                </button>
+              </div>
+            )}
             {err && <div style={{ ...G.err, marginTop: "1rem" }}>{err}</div>}
           </div>
         )}
@@ -943,6 +1039,7 @@ export default function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.4rem", flexWrap: "wrap", gap: "0.55rem" }}>
               <span style={{ color: LIME, fontSize: "0.6rem", letterSpacing: "3px", textTransform: "uppercase" }}>{OUTPUTS.find(o => o.key === outType)?.icon} {OUTPUTS.find(o => o.key === outType)?.label}</span>
               <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                <button className="gh" style={G.ghost} onClick={() => outType && outputs[outType] && downloadText(`forge-${outType}.md`, formatOutputForDownload(outputs[outType], outType))}>⬇ Download</button>
                 <button className="gh" style={G.ghost} onClick={async () => { setOutputs(p => { const n = { ...p }; delete n[outType]; return n; }); await generate(outType); }}>↻ Regen</button>
                 <button className="gh" style={G.ghost} onClick={() => setPhase("output-select")}>← All</button>
                 <button className="gh" style={G.ghost} onClick={resetIdea}>New Idea</button>
