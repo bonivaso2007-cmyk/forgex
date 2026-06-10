@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 // ── TYPES ──────────────────────────────────────────────────
