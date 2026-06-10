@@ -7,7 +7,7 @@ declare global { interface Window { storage?: any } }
 // Free AI via Groq - https://console.groq.com/
 // Get your free API key there, no credit card needed
 const GROQ_API_KEY = "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"; // <-- Put your key here
-const API = "https://api.groq.com/openai/v1/chat/completions";
+const API = "/api/ai"; // Proxied through Vite dev server to hide the key
 const MODEL = "llama-3.3-70b-versatile"; // Free, fast, excellent quality
 const Q_TARGET = 4;
 const LIME = "#C8FF00";
@@ -381,7 +381,8 @@ function AuthScreen({ onAuth }: { onAuth: (u: any, isNew: boolean) => void }) {
     <div style={{ minHeight: "100vh", background: GRADIENT_HERO, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem", fontFamily: "monospace" }}>
       <div style={{ width: "100%", maxWidth: "400px" }}>
         <h1 style={{ color: LIME, fontSize: "2rem", fontWeight: "900", letterSpacing: "7px", margin: "0 0 4px", textShadow: "0 0 30px rgba(200,255,0,0.3)" }}>FORGE</h1>
-        <p style={{ color: TEXT_MUTED, fontSize: "0.58rem", letterSpacing: "3px", margin: "0 0 2.5rem" }}>IDEA ENGINE FOR FOUNDERS</p>
+        <p style={{ color: TEXT_MUTED, fontSize: "0.58rem", letterSpacing: "3px", margin: "0 0 4px" }}>IDEA ENGINE FOR FOUNDERS</p>
+        <p style={{ color: TEXT_MUTED, fontSize: "0.6rem", margin: "0 0 2.5rem", opacity: 0.6 }}>Turn rough ideas into investor‑ready plans in minutes</p>
         <div style={{ display: "flex", gap: "0", marginBottom: "1.8rem", border: `1px solid ${BORDER_GLASS}`, borderRadius: "7px", overflow: "hidden" }}>
           {["login", "signup"].map(m => (
             <button key={m} onClick={() => { setMode(m); setErr(""); }} style={{ flex: 1, background: mode === m ? LIME : "transparent", color: mode === m ? "#000" : TEXT_SECONDARY, border: "none", padding: "0.72rem", fontSize: "0.7rem", fontWeight: "900", letterSpacing: "2px", cursor: "pointer", fontFamily: "monospace", textTransform: "uppercase", transition: "all .2s" }}>{m}</button>
@@ -575,6 +576,98 @@ function HistoryPanel({ uid, onLoad, onClose }: { uid: string; onLoad: (data: Sa
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── FORGE FEEDBACK ─────────────────────────────────────────
+function FeedbackPanel({ onClose }: { onClose: () => void }) {
+  const [type, setType] = useState("ux");
+  const [msg, setMsg] = useState("");
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const TYPES = [
+    { key: "ux", label: "UX / Usability", icon: "🎨" },
+    { key: "bug", label: "Bug Report", icon: "🐛" },
+    { key: "feature", label: "New Feature", icon: "💡" },
+    { key: "praise", label: "Praise", icon: "🔥" },
+  ];
+
+  const send = async () => {
+    if (!msg.trim()) return;
+    setLoading(true);
+    const entry = { type, msg, email: email.trim(), ts: Date.now(), idea: "" };
+    try {
+      const existing: any[] = JSON.parse(localStorage.getItem("forge_feedback") || "[]");
+      existing.push(entry);
+      localStorage.setItem("forge_feedback", JSON.stringify(existing));
+      setSent(true);
+    } catch {
+      setSent(true);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#00000095", zIndex: 3000, display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ width: "min(480px,100vw)", background: BG_PANEL, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderLeft: `1px solid ${BORDER_GLASS}`, display: "flex", flexDirection: "column", height: "100vh" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.2rem 1.5rem", borderBottom: `1px solid ${BORDER_GLASS}`, flexShrink: 0 }}>
+          <div>
+            <div style={{ color: LIME, fontSize: "0.72rem", fontWeight: "900", letterSpacing: "3px", fontFamily: "monospace" }}>FORGE FEEDBACK</div>
+            <div style={{ color: TEXT_MUTED, fontSize: "0.55rem", letterSpacing: "1.5px", marginTop: "2px", fontFamily: "monospace" }}>Your review is our next release.</div>
+          </div>
+          <button onClick={onClose} style={{ background: "transparent", border: `1px solid ${BORDER_GLASS}`, color: TEXT_SECONDARY, borderRadius: "5px", padding: "5px 10px", cursor: "pointer", fontFamily: "monospace", fontSize: "0.68rem" }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+          {sent ? (
+            <div style={{ textAlign: "center", padding: "3rem 1rem" }}>
+              <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🔥</div>
+              <div style={{ color: LIME, fontSize: "0.9rem", fontWeight: "bold", marginBottom: "0.5rem", fontFamily: "monospace" }}>FEEDBACK RECEIVED</div>
+              <div style={{ color: TEXT_SECONDARY, fontSize: "0.78rem", lineHeight: "1.6" }}>Thanks for helping forge FORGE for every founder. You rock.</div>
+              <button onClick={onClose} style={{ marginTop: "1.8rem", background: LIME, color: "#000", border: "none", borderRadius: "6px", padding: "0.75rem 1.8rem", fontSize: "0.72rem", fontWeight: "900", letterSpacing: "2px", cursor: "pointer", fontFamily: "monospace" }}>CLOSE →</button>
+            </div>
+          ) : (
+            <>
+              <div>
+                <div style={{ color: TEXT_MUTED, fontSize: "0.56rem", letterSpacing: "2.5px", marginBottom: "0.6rem", textTransform: "uppercase" }}>What are you sharing?</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                  {TYPES.map(t => (
+                    <div key={t.key} onClick={() => setType(t.key)} style={{ background: type === t.key ? `${LIME}12` : "rgba(255,255,255,0.03)", border: `1px solid ${type === t.key ? LIME : BORDER_GLASS}`, borderRadius: "8px", padding: "0.65rem 0.85rem", cursor: "pointer", transition: "all .15s" }}>
+                      <div style={{ fontSize: "1rem", marginBottom: "0.2rem" }}>{t.icon}</div>
+                      <div style={{ color: type === t.key ? LIME : TEXT_SECONDARY, fontSize: "0.7rem", fontFamily: "monospace", fontWeight: 600 }}>{t.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: TEXT_MUTED, fontSize: "0.56rem", letterSpacing: "2.5px", marginBottom: "0.6rem", textTransform: "uppercase" }}>Tell us what happened or what you'd love to see.</div>
+                <textarea
+                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "8px", color: TEXT_PRIMARY, fontSize: "0.84rem", padding: "0.85rem 1rem", resize: "none", outline: "none", fontFamily: FONT.sans, lineHeight: "1.7", minHeight: "130px", boxSizing: "border-box" }}
+                  placeholder="Describe what you're experiencing or suggest an improvement…"
+                  value={msg} onChange={e => setMsg(e.target.value)}
+                />
+              </div>
+              <div>
+                <div style={{ color: TEXT_MUTED, fontSize: "0.56rem", letterSpacing: "2.5px", marginBottom: "0.6rem", textTransform: "uppercase" }}>Your email or handle <span style={{ opacity: 0.5 }}>(optional — for follow-up)</span></div>
+                <input
+                  style={{ width: "100%", background: "rgba(0,0,0,0.4)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "8px", color: TEXT_PRIMARY, fontSize: "0.84rem", padding: "0.75rem 1rem", outline: "none", fontFamily: FONT.sans, boxSizing: "border-box" }}
+                  placeholder="founder@domain.com or @handle"
+                  value={email} onChange={e => setEmail(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={send}
+                disabled={!msg.trim() || loading}
+                style={{ background: msg.trim() && !loading ? LIME : "rgba(255,255,255,0.05)", color: msg.trim() && !loading ? "#000" : TEXT_MUTED, border: "none", borderRadius: "8px", padding: "0.9rem", fontSize: "0.74rem", fontWeight: "900", letterSpacing: "2.5px", cursor: msg.trim() && !loading ? "pointer" : "not-allowed", fontFamily: "monospace", transition: "all .2s", opacity: loading ? 0.6 : 1 }}
+              >
+                {loading ? "SENDING…" : "SHARE FEEDBACK →"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1150,6 +1243,7 @@ export default function App() {
   const [ideaScore, setIdeaScore] = useState<{score: number; label: string; verdict?: string; strengths?: string[]; gaps?: string[]} | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [currentIdeaId, setCurrentIdeaId] = useState<string | null>(null);
   const [freeCount, setFreeCount] = useState(0);
   const [showUnlock, setShowUnlock] = useState(false);
@@ -1345,7 +1439,11 @@ export default function App() {
         .glass-card:hover{border-color:var(--border-hover);background:var(--bg-card-hover)}
         .mode-btn{background:transparent;border:1px solid var(--border);color:var(--text-secondary);border-radius:8px;padding:0.4rem;cursor:pointer;font-size:0.85rem;display:flex;align-items:center;transition:all .2s}
         .mode-btn:hover{border-color:var(--border-hover);color:var(--text-primary)}
+        .gap-cta{cursor:pointer;font-weight:700;letter-spacing:0.5px;transition:all .15s}
+        .gap-cta:hover{opacity:0.75;text-decoration:underline;text-underline-offset:3px}
         @media(max-width:640px){.desktop-only{display:none!important}}@media(min-width:641px){.mobile-only{display:none!important}}
+        .output-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.78rem;margin-bottom:0.78rem}@media(max-width:900px){.output-grid{grid-template-columns:repeat(2,1fr);gap:0.6rem}}@media(max-width:560px){.output-grid{grid-template-columns:1fr;gap:0.55rem}}
+        .score-block{margin-bottom:1.8rem}@media(max-width:560px){.score-block{padding:0.9rem}}
       `}</style>
 
       {/* FABs */}
@@ -1356,6 +1454,7 @@ export default function App() {
       {company && <CompanyBuilder idea={idea} qaCtx={ctxStr(qa)} profile={profile} onClose={() => setCompany(false)} />}
       {showProfile && <ProfilePanel profile={profile} user={user} onUpdate={p => setProfile(p)} onLogout={logout} onClose={() => setShowProfile(false)} />}
       {showHistory && user && <HistoryPanel uid={user.uid} onLoad={loadIdea} onClose={() => setShowHistory(false)} />}
+      {showFeedback && <FeedbackPanel onClose={() => setShowFeedback(false)} />}
 
       <div style={{ ...G.wrap, paddingRight: intel ? "440px" : "0" }}>
         {/* HEADER */}
@@ -1363,6 +1462,7 @@ export default function App() {
           <div>
             <h1 style={{ color: LIME, fontSize: "1.9rem", fontWeight: 900, letterSpacing: "7px", margin: 0, lineHeight: 1, textShadow: "0 0 30px rgba(200,255,0,0.3)" }}>FORGE</h1>
             <p style={{ color: TEXT_MUTED, fontSize: "0.56rem", letterSpacing: "3px", margin: "4px 0 0" }}>IDEA ENGINE FOR FOUNDERS</p>
+            <p style={{ color: TEXT_MUTED, fontSize: "0.6rem", margin: "6px 0 0", opacity: 0.6 }}>Turn rough ideas into investor‑ready plans in minutes</p>
           </div>
           <div style={{ display: "flex", gap: "0.45rem", alignItems: "center", flexWrap: "wrap" }}>
             {!user && phase === "ignition" && (
@@ -1377,6 +1477,7 @@ export default function App() {
             {user ? (
               <>
                 <button className="gh" style={G.ghost} onClick={() => setShowHistory(true)}>📁 Vault</button>
+                <button className="gh" style={G.ghost} onClick={() => setShowFeedback(true)}>💬 Feedback</button>
                 <button className="gh" style={{ ...G.ghost, display: "flex", alignItems: "center", gap: "0.4rem" }} onClick={() => setShowProfile(true)}>
                   <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: `${LIME}15`, border: `1px solid ${LIME}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: LIME }}>{profile?.name?.[0]?.toUpperCase()}</div>
                   <span style={{ color: TEXT_SECONDARY, fontSize: "0.64rem" }}>{profile?.name?.split(" ")[0]}</span>
@@ -1455,31 +1556,41 @@ export default function App() {
         {phase === "output-select" && (
           <div style={{ animation: "fadeIn .3s ease" }}>
             {ideaScore && (
-              <div style={{ background: "rgba(255,255,255,0.04)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${scoreColor(ideaScore.score)}25`, borderRadius: "14px", padding: "1.1rem 1.3rem", marginBottom: "1.8rem", boxShadow: `0 4px 30px ${scoreColor(ideaScore.score)}10` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.7rem" }}>
-                  <div style={{ fontSize: "2.2rem", fontWeight: 900, color: scoreColor(ideaScore.score), fontFamily: "monospace", lineHeight: 1, textShadow: `0 0 30px ${scoreColor(ideaScore.score)}60` }}>{ideaScore.score}</div>
-                  <div style={{ flex: 1 }}><div style={{ color: scoreColor(ideaScore.score), fontSize: "0.63rem", fontWeight: "bold", letterSpacing: "2px" }}>{(ideaScore.label || "").toUpperCase()}</div><div style={{ color: TEXT_SECONDARY, fontSize: "0.76rem", marginTop: "2px", lineHeight: "1.5" }}>{ideaScore.verdict}</div></div>
-                  <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: `${scoreColor(ideaScore.score)}12`, border: `2px solid ${scoreColor(ideaScore.score)}35`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.5rem", color: scoreColor(ideaScore.score), fontWeight: "bold", textAlign: "center", lineHeight: "1.3", fontFamily: "monospace" }}>IDEA<br />SCORE</div>
+              <div className="score-block" style={{ background: "rgba(255,255,255,0.04)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${scoreColor(ideaScore.score)}25`, borderRadius: "14px", padding: "1.1rem 1.3rem", marginBottom: "1.8rem", boxShadow: `0 4px 30px ${scoreColor(ideaScore.score)}10` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.9rem", marginBottom: "0.75rem" }}>
+                  <div style={{ fontSize: "2.4rem", fontWeight: 900, color: scoreColor(ideaScore.score), fontFamily: "monospace", lineHeight: 1, textShadow: `0 0 30px ${scoreColor(ideaScore.score)}60` }}>{ideaScore.score}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "4px" }}>
+                      <span style={{ color: scoreColor(ideaScore.score), fontSize: "0.6rem", fontWeight: 900, letterSpacing: "2.5px" }}>IDEA SCORE</span>
+                      <span style={{ background: `${scoreColor(ideaScore.score)}18`, border: `1px solid ${scoreColor(ideaScore.score)}30`, borderRadius: "20px", padding: "2px 8px", fontSize: "0.56rem", fontWeight: 700, color: scoreColor(ideaScore.score), letterSpacing: "1.5px" }}>{(ideaScore.label || "").toUpperCase()}</span>
+                    </div>
+                    <div style={{ color: TEXT_SECONDARY, fontSize: "0.76rem", lineHeight: "1.5" }}>{ideaScore.verdict}</div>
+                  </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
-                  <div><div style={{ color: LIME, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>STRENGTHS</div>{(ideaScore.strengths || []).map((s, i) => <div key={i} style={{ color: TEXT_SECONDARY, fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {s}</div>)}</div>
-                  <div><div style={{ color: PINK, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>GAPS</div>{(ideaScore.gaps || []).map((g, i) => <div key={i} style={{ color: TEXT_SECONDARY, fontSize: "0.73rem", marginBottom: "0.14rem" }}>→ {g}</div>)}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "0.5rem" }}>
+                  <div style={{ background: "rgba(200,255,0,0.04)", borderRadius: "10px", padding: "0.7rem 0.9rem", border: "1px solid rgba(200,255,0,0.1)" }}><div style={{ color: LIME, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>STRENGTHS</div>{(ideaScore.strengths || []).map((s, i) => <div key={i} style={{ color: TEXT_SECONDARY, fontSize: "0.72rem", marginBottom: "0.14rem" }}>→ {s}</div>)}</div>
+                  <div style={{ background: "rgba(255,60,120,0.04)", borderRadius: "10px", padding: "0.7rem 0.9rem", border: "1px solid rgba(255,60,120,0.1)" }}><div style={{ color: PINK, fontSize: "0.54rem", letterSpacing: "2px", marginBottom: "0.28rem" }}>GAPS</div>{(ideaScore.gaps || []).map((g, i) => <div key={i} style={{ color: TEXT_SECONDARY, fontSize: "0.72rem", marginBottom: "0.14rem" }}>→ {g}</div>)}<div className="gap-cta" style={{ color: LIME, fontSize: "0.6rem", marginTop: "0.35rem", paddingTop: "0.35rem", borderTop: "1px solid rgba(255,60,120,0.1)" }} onClick={() => generate("blueprint")}>→ Refine with the Blueprint →</div></div>
                 </div>
               </div>
             )}
             <p style={G.label}>Build your output</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.78rem", marginBottom: "0.78rem" }}>
+            <div className="output-grid">
               {OUTPUTS.map(o => {
                 const done = !!outputs[o.key];
                 return (<div key={o.key} className="outcard" style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${done ? `${LIME}30` : BORDER_GLASS}`, borderRadius: "14px", padding: "1.05rem", cursor: "pointer", transition: "all .18s", position: "relative", boxShadow: done ? `0 0 20px ${LIME}10` : "none" }} onClick={() => generate(o.key)}>
-                  {done && <span style={{ position: "absolute", top: "0.5rem", right: "0.6rem", color: LIME, fontSize: "0.5rem", letterSpacing: "1.5px" }}>READY</span>}
-                  <div style={{ fontSize: "1.25rem", marginBottom: "0.42rem" }}>{o.icon}</div>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "0.35rem" }}>
+                    <div style={{ fontSize: "1.25rem" }}>{o.icon}</div>
+                    {done && <span style={{ background: "rgba(200,255,0,0.1)", border: "1px solid rgba(200,255,0,0.25)", borderRadius: "20px", padding: "2px 7px", fontSize: "0.52rem", fontWeight: 700, color: LIME, letterSpacing: "1px", flexShrink: 0 }}>✓ Done</span>}
+                  </div>
                   <div style={{ color: TEXT_PRIMARY, fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.22rem" }}>{o.label}</div>
                   <div style={{ color: TEXT_MUTED, fontSize: "0.68rem", lineHeight: "1.4" }}>{o.desc}</div>
+                  <div style={{ marginTop: "0.55rem", paddingTop: "0.5rem", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ color: done ? LIME : TEXT_MUTED, fontSize: "0.6rem", fontWeight: 700, letterSpacing: "1px" }}>{done ? "OPEN →" : "GENERATE →"}</span>
+                  </div>
                 </div>);
               })}
             </div>
-            <div style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${PURPLE}25`, borderRadius: "14px", padding: "1.05rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "1rem", transition: "all .18s" }} onClick={() => setCompany(true)}>
+            <div className="outcard" style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${PURPLE}25`, borderRadius: "14px", padding: "1.05rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "1rem", transition: "all .18s" }} onClick={() => setCompany(true)}>
               <span style={{ fontSize: "1.25rem" }}>🏗️</span>
               <div style={{ flex: 1 }}><div style={{ color: PURPLE, fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.2rem" }}>Company Builder</div><div style={{ color: TEXT_MUTED, fontSize: "0.68rem" }}>Systems, workflows & org design — market-aware</div></div>
               <span style={{ color: PURPLE, fontSize: "1rem", flexShrink: 0 }}>→</span>
@@ -1529,6 +1640,7 @@ export default function App() {
         {/* OUTPUT */}
         {phase === "output" && outType && outputs[outType] && (
           <div style={{ animation: "fadeIn .3s ease" }}>
+            {err && <div style={{ ...G.err, marginBottom: "1.2rem", animation: "fadeIn .3s ease" }}>{err}</div>}
             {/* Summary at a Glance */}
             {outType !== "mindmap" && (
               <div style={{ marginBottom: "1.8rem", animation: "fadeIn .4s ease" }}>
