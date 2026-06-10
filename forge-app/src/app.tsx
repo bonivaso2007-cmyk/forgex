@@ -7,7 +7,7 @@ declare global { interface Window { storage?: any } }
 // Free AI via Groq - https://console.groq.com/
 // Get your free API key there, no credit card needed
 const GROQ_API_KEY = "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"; // <-- Put your key here
-const API = "/api/ai"; // Proxied through Vite dev server to hide the key
+const API = "/api/ai"; // Vite proxy in dev, direct in prod (see fetch below)
 const MODEL = "llama-3.3-70b-versatile"; // Free, fast, excellent quality
 const Q_TARGET = 4;
 const LIME = "#C8FF00";
@@ -123,7 +123,8 @@ const store = {
 // ── API ───────────────────────────────────────────────────
 async function aiStream(system: string, user: string, onChunk: (chunk: string) => void, maxTok = 1400) {
   if (!GROQ_API_KEY) throw new Error("Missing GROQ_API_KEY - add your key at line 5");
-  const res = await fetch(API, {
+  const url = import.meta.env.DEV ? API : "https://api.groq.com/openai/v1/chat/completions";
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
