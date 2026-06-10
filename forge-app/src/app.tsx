@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 // ── TYPES ──────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -7,10 +7,12 @@ declare global { interface Window { storage?: any } }
 
 // Free AI via Groq - https://console.groq.com/
 // Get your free API key there, no credit card needed
-const GROQ_API_KEY = "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"; // <-- Put your key here
+// Use env variable - never hardcode API keys!
+// Set VITE_GROQ_API_KEY in your .env file
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || "";
 const API = "/api/ai"; // Vite proxy in dev, direct in prod (see fetch below)
 const MODEL = "llama-3.3-70b-versatile"; // Free, fast, excellent quality
-const Q_TARGET = 4;
+const Q_TARGET = 2; // Allow output after just 2 questions
 const LIME = "#C8FF00";
 const PURPLE = "#B87FFF";
 const ORANGE = "#FF6B00";
@@ -106,64 +108,133 @@ interface User { uid: string; email: string }
 interface Output { key: string; label: string; icon: string; desc: string }
 
 // ── STORAGE ───────────────────────────────────────────────
+// localStorage wrapper - works in all browsers
 const store = {
   async get(k: string) {
-    try { const r = await window.storage.get(k); if (!r?.value) return null; return JSON.parse(r.value); } catch { return null; }
+    try { const r = localStorage.getItem(k); if (!r) return null; return JSON.parse(r); } catch { return null; }
   },
   async set(k: string, v: unknown) {
-    try { await window.storage.set(k, JSON.stringify(v)); } catch {}
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
   },
   async del(k: string) {
-    try { await window.storage.delete(k); } catch {}
+    try { localStorage.removeItem(k); } catch {}
   },
   async list(prefix: string) {
-    try { const r = await window.storage.list(prefix); return r?.keys || []; } catch { return []; }
+    try { return Object.keys(localStorage).filter(k => k.startsWith(prefix)); } catch { return []; }
   }
 };
 
-// ── API ───────────────────────────────────────────────────
-async function aiStream(system: string, user: string, onChunk: (chunk: string) => void, maxTok = 7000) {
-  if (!GROQ_API_KEY) throw new Error("Missing GROQ_API_KEY - add your key at line 5");
-  const url = import.meta.env.DEV ? API : "https://api.groq.com/openai/v1/chat/completions";
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROQ_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTok,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user }
-      ],
-      stream: true
-    })
-  });
+// ── NETWORK RETRY (exponential backoff) ─────────────────
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res;
+      if (res.status >= 500 && i < retries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+        continue;
+      }
+      return res;
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
+// ── MULTI-MODEL API (cascade with fallback) ──────────────
+// Keys from .env — NEVER commit to git
+const KEYS = {
+  gemini: import.meta.env.VITE_GEMINI_API_KEY || "",
+  groq: GROQ_API_KEY,
+  deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY || "",
+};
+
+// Models ranked by quality for different tasks
+const MODELS = {
+  quick: { name: "llama-3.3-70b-versatile", provider: "groq", key: KEYS.groq, url: "https://api.groq.com/openai/v1/chat/completions" },
+  smart: { name: "gemini-2.0-flash", provider: "gemini", key: KEYS.gemini, url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent" },
+  deep: { name: "deepseek-chat", provider: "deepseek", key: KEYS.deepseek, url: "https://api.deepseek.com/v1/chat/completions" },
+};
+
+// Smart model selection based on task
+function pickModel(maxTok: number) {
+  if (maxTok >= 3000) return MODELS.deep;  // Deep analysis → DeepSeek
+  if (maxTok <= 600) return MODELS.quick;  // Fast questions → Groq
+  return MODELS.smart;                       // Default → Gemini
+}
+
+async function aiStreamRaw(provider: string, url: string, key: string, model: string, system: string, user: string, onChunk: (chunk: string) => void, maxTok = 7000) {
+  if (!key) throw new Error(`Missing API key for ${provider}`);
+  
+  const isGemini = provider === "gemini";
+  const body = isGemini
+    ? { contents: [{ parts: [{ text: system + "\n\n" + user }] }], generationConfig: { maxOutputTokens: maxTok } }
+    : { model, max_tokens: maxTok, messages: [{ role: "system", content: system }, { role: "user", content: user }], stream: true };
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  let finalUrl = url;
+  if (isGemini) {
+    finalUrl += `?key=${key}`;
+  } else {
+    headers["Authorization"] = `Bearer ${key}`;
+  }
+
+  const res = await fetchWithRetry(finalUrl, { method: "POST", headers, body: JSON.stringify(body) });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`API ${res.status}: ${err}`);
+    throw new Error(`${provider} ${res.status}: ${err}`);
   }
   if (!res.body) throw new Error("No response body");
+  
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let full = "";
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    for (const line of dec.decode(value, { stream: true }).split("\n")) {
-      if (!line.startsWith("data:")) continue;
-      const raw = line.slice(5).trim();
-      if (!raw || raw === "[DONE]") continue;
-      try {
-        const d = JSON.parse(raw);
-        const t = d?.choices?.[0]?.delta?.content;
-        if (t && typeof t === "string") { full += t; onChunk(full); }
-      } catch { /* ignore malformed chunks */ }
+    const text = dec.decode(value, { stream: true });
+    
+    if (isGemini) {
+      // Gemini SSE format
+      for (const line of text.split("\n")) {
+        if (!line.trim() || !line.startsWith("data:")) continue;
+        try {
+          const d = JSON.parse(line.slice(5));
+          const t = d?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (t) { full += t; onChunk(full); }
+        } catch {}
+      }
+    } else {
+      // OpenAI-compatible SSE format
+      for (const line of text.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.slice(5).trim();
+        if (!raw || raw === "[DONE]") continue;
+        try {
+          const d = JSON.parse(raw);
+          const t = d?.choices?.[0]?.delta?.content;
+          if (t && typeof t === "string") { full += t; onChunk(full); }
+        } catch {}
+      }
     }
   }
   return full;
+}
+
+async function aiStream(system: string, user: string, onChunk: (chunk: string) => void, maxTok = 7000) {
+  const primary = pickModel(maxTok);
+  try {
+    return await aiStreamRaw(primary.provider, primary.url, primary.key, primary.name, system, user, onChunk, maxTok);
+  } catch (e) {
+    console.warn(`${primary.provider} failed, falling back to Groq:`, e);
+    // Fallback to Groq (most reliable free tier)
+    if (primary.provider !== "groq" && KEYS.groq) {
+      return await aiStreamRaw("groq", MODELS.quick.url, KEYS.groq, MODELS.quick.name, system, user, onChunk, maxTok);
+    }
+    throw e;
+  }
 }
 
 async function ai(sys: string, usr: string, asJSON = false, maxTok = 1400, retries = 2) {
@@ -171,80 +242,53 @@ async function ai(sys: string, usr: string, asJSON = false, maxTok = 1400, retri
     try {
       let full = "";
       await aiStream(sys, usr, t => { full = t; }, maxTok);
-      if (!full) throw new Error("Empty");
+      if (!full) throw new Error("Empty response");
       if (!asJSON) return full;
-      // Strip markdown fences and surrounding text
+      
+      // JSON parsing with proper nesting detection
       let raw = full.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-      // Find the first opening { or [ and slice from there
       const openMatch = raw.search(/[{[]/);
-      if (openMatch === -1) throw new Error("No JSON object found in response");
+      if (openMatch === -1) throw new Error("No JSON object found");
       raw = raw.slice(openMatch);
-      // Find the end — first } for objects, first ] for arrays
+      
       let end = -1, nesting = 0, inStr = false;
       for (let j = 0; j < raw.length; j++) {
         const c = raw[j];
         if (c === '"' && raw[j - 1] !== '\\') { inStr = !inStr; continue; }
         if (inStr) continue;
-        if (c === '{' || c === '[') { if (nesting === 0) end = -1; nesting++; }
+        if (c === '{' || c === '[') { nesting++; }
         else if (c === '}' || c === ']') { nesting--; if (nesting === 0) { end = j + 1; break; } }
       }
-      if (end === -1) end = raw.indexOf("}");
-      if (end === -1) end = raw.indexOf("]");
       if (end === -1) end = raw.length;
       let s = raw.slice(0, end);
-      // Handle truncated JSON - close open strings, arrays, and objects
-      if (inStr) { s += '"'; } // Close unclosed string
-      // Count open brackets and close them
-      const openBrackets = (s.match(/\{/g) || []).length - (s.match(/\}/g) || []).length;
-      const openBrackets2 = (s.match(/\[/g) || []).length - (s.match(/\]/g) || []).length;
-      for (let b = 0; b < openBrackets; b++) s += "}";
-      for (let b = 0; b < openBrackets2; b++) s += "]";
-      // Fix unclosed arrays in strings - split by common keys
-      const keys = ["title", "vision", "sections", "phases", "weeks", "milestones", "kpis", "strengths", "weaknesses", "opportunities", "threats", "summary", "tasks", "verdict", "label", "score", "content", "bullets"];
-      for (const k of keys) {
-        const r = new RegExp(`"${k}"\\s*:\\s*[^\\[\\{"жа]*$`, "gi");
-        if (r.test(s) && !s.endsWith("]") && !s.endsWith("}")) {
-          s += '","MISSING"]';
-        }
-      }
-      // Remove control characters, BOM, and strip trailing commas
-      s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").replace(/^\uFEFF/, "").replace(/,(\s*[}\]])/g, "$1").trim();
-      // Try native parse first
-      try { return JSON.parse(s); } catch {}
-      // Fallback: fix common LLM JSON malformation patterns
-      s = s.replace(/([{,])\s*([\]}])/g, "$1$2"); // trailing commas
-      s = s.replace(/([{,]\s*)'([^']*)'\s:/g, '$1"$2":'); // single-quote keys
-      s = s.replace(/:(\s*)'([^']*)'(?=[,\s}\]])/g, ': "$2"'); // single-quote vals
-      s = s.replace(/\{:\s*/g, '{"score":'); // {: "score" → {"score"
-      s = s.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '{"$1":'); // {unquoted_key: → {"unquoted_key":
-      s = s.replace(/:\s*([a-zA-Z_][a-zA-Z0-9_]*)(\s*[,}\]])/g, ': "$1"$2'); // :unquoted_val → :"unquoted_val"
-      // Last resort: try to extract partial JSON with defaults
-      const partial: Record<string, unknown> = {};
-      const titleMatch = s.match(/"title"\s*:\s*"([^"]+)"/);
-      if (titleMatch) partial.title = titleMatch[1];
-      const visionMatch = s.match(/"vision"\s*:\s*"([^"]+)"/);
-      if (visionMatch) partial.vision = visionMatch[1];
-      const summaryMatch = s.match(/"summary"\s*:\s*"([^"]+)"/);
-      if (summaryMatch) partial.summary = summaryMatch[1];
-      // Extract arrays
-      const sectionsMatch = s.match(/"sections"\s*:\s*\[([^\]]*)/);
-      if (sectionsMatch) {
-        const items = sectionsMatch[1].match(/"[^"]+"/g) || [];
-        partial.sections = items.map((x: string) => ({ title: x.replace(/"/g, ""), content: "", bullets: [] }));
-      }
-      const phasesMatch = s.match(/"phases"\s*:\s*\[([^\]]*)/);
-      if (phasesMatch) {
-        const items = phasesMatch[1].match(/"[^"]+"/g) || [];
-        partial.phases = items.map((x: string) => ({ phase: "1", title: x.replace(/"/g, ""), duration: "", goal: "", milestones: [], kpis: [] }));
-      }
-      const weeksMatch = s.match(/"weeks"\s*:\s*\[([^\]]*)/);
-      if (weeksMatch) {
-        const items = weeksMatch[1].match(/"[^"]+"/g) || [];
-        partial.weeks = items.map((x: string, idx: number) => ({ week: `Week ${idx + 1}`, focus: x.replace(/"/g, ""), tasks: [] }));
-      }
-      if (Object.keys(partial).length > 0) return partial;
-      throw new Error(`Invalid JSON: ${s.slice(0, 80)}`);
-    } catch (e: unknown) { if (i === retries) throw e; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
+      s = s.replace(/,(\s*[}\]])/g, "$1").trim();
+      
+      try { return JSON.parse(s); } catch { return JSON.parse(s); }
+    } catch (e: unknown) {
+      if (i === retries) throw e;
+      await new Promise(r => setTimeout(r, 600 * (i + 1)));
+    }
+  }
+}
+
+// ── ERROR BOUNDARY ───────────────────────────────────────
+class ErrorBoundary extends React.Component<{children: React.ReactNode; fallback?: React.ReactNode}, {hasError: boolean}> {
+  constructor(props: {children: React.ReactNode; fallback?: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(e: Error) { console.error("Forge error:", e); }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div style={{ padding: "2rem", background: "rgba(255,60,120,0.1)", border: "1px solid #FF3C78", borderRadius: "12px", textAlign: "center" }}>
+          <div style={{ color: "#FF3C78", fontWeight: 700, marginBottom: "0.5rem" }}>Something went wrong</div>
+          <button onClick={() => this.setState({ hasError: false })} style={{ padding: "0.5rem 1rem", background: "#FF3C78", color: "#000", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}>Try Again</button>
+        </div>
+      );
+    }
+    return this.props.children;
   }
 }
 
@@ -388,6 +432,14 @@ function marketContext(p: any) {
 }
 
 // ── AUTH SCREENS ──────────────────────────────────────────
+// ── SHA-256 PASSWORD HASHING ─────────────────────────────
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 function AuthScreen({ onAuth }: { onAuth: (u: any, isNew: boolean) => void }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ email: "", password: "", name: "" });
@@ -404,13 +456,14 @@ function AuthScreen({ onAuth }: { onAuth: (u: any, isNew: boolean) => void }) {
       const exists = await store.get(`user:${uid}`);
       if (exists) { setErr("Account already exists. Log in instead."); setLoading(false); return; }
       if (!name.trim()) { setErr("Enter your name."); setLoading(false); return; }
-      const user = { uid, email: email.toLowerCase(), name: name.trim(), passwordHash: btoa(password), createdAt: Date.now() };
+      const passwordHash = await hashPassword(password);
+      const user = { uid, email: email.toLowerCase(), name: name.trim(), passwordHash, createdAt: Date.now() };
       await store.set(`user:${uid}`, user);
       await store.set(`session`, { uid, email: user.email, name: user.name });
       onAuth(user, true);
     } else {
       const user = await store.get(`user:${uid}`);
-      if (!user || user.passwordHash !== btoa(password)) { setErr("Invalid email or password."); setLoading(false); return; }
+      if (!user || user.passwordHash !== await hashPassword(password)) { setErr("Invalid email or password."); setLoading(false); return; }
       await store.set(`session`, { uid, email: user.email, name: user.name });
       onAuth(user, false);
     }
@@ -806,6 +859,28 @@ function MindMap({ data }: { data: MindMapData }) {
   const onWheel = useCallback((e: React.WheelEvent) => { e.preventDefault(); setTransform(t => ({ ...t, scale: Math.min(Math.max(t.scale * (e.deltaY > 0 ? 0.92 : 1.09), 0.3), 3) })); }, []);
 
   useEffect(() => { const el = svgRef.current; if (!el) return; const handler = (e: Event) => onWheel(e as unknown as React.WheelEvent); el.addEventListener("wheel", handler, { passive: false }); return () => el.removeEventListener("wheel", handler); }, [onWheel]);
+
+  // Mobile fallback — render compact card list instead of SVG
+  if (typeof window !== "undefined" && window.innerWidth < 640) {
+    return (
+      <div style={{ background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "12px", padding: "1rem" }}>
+        <div style={{ color: LIME, fontSize: "0.7rem", letterSpacing: "3px", marginBottom: "1rem", textTransform: "uppercase", fontFamily: "monospace" }}>Mind Map</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {branches.map((b, i) => {
+            const bc = b.color || BRANCH_COLORS[i % 6];
+            return (
+              <div key={i} style={{ background: `${bc}10`, border: `1px solid ${bc}25`, borderRadius: "8px", padding: "0.75rem" }}>
+                <div style={{ color: bc, fontWeight: 700, fontSize: "0.8rem", marginBottom: "0.4rem", fontFamily: "monospace" }}>{b.label}</div>
+                {(b.nodes || []).slice(0, 4).map((n, j) => (
+                  <div key={j} style={{ color: TEXT_SECONDARY, fontSize: "0.72rem", paddingLeft: "0.5rem", marginBottom: "0.2rem", fontFamily: "monospace" }}>→ {String(n.node || "")}</div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "relative", background: BG_GLASS, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${BORDER_GLASS}`, borderRadius: "12px", overflow: "hidden" }}>
@@ -1240,12 +1315,12 @@ function IntelPanel({ idea, profile, onClose }: { idea: string; profile: any; on
 
 // ── OUTPUT CONFIGS ────────────────────────────────────────
 const CONFIGS: Record<string, { sys: string; usr: (idea: string, ctx: string, p: unknown) => string }> = {
-  mindmap: { sys: `JSON only. Output MUST use correct English. {"center":"2-3 words","branches":[{"label":"2 words","color":"#hex","nodes":["short","short","short","short"]}]} 5-6 branches,3-4 nodes,max 4 words,vivid hex colors. Start with { end with }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
-  blueprint: { sys: `JSON only. Output MUST use correct English. {"title":"...","vision":"sentence","sections":[{"title":"NAME","content":"2-3 sentences","bullets":["pt","pt","pt"]}]} 7 sections: Core Concept,Problem & Solution,Target Market,Unique Advantage,Key Assumptions,Critical Risks,Success Metrics. Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
-  roadmap: { sys: `JSON only. Output MUST use correct English. {"title":"...","phases":[{"phase":"Phase 1","title":"...","duration":"X weeks","goal":"...","milestones":["...","...","..."],"kpis":["...","..."]}]} 4 phases: Foundation,Launch,Scale,Dominate. Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
-  businessplan: { sys: `JSON only. Output MUST use correct English. {"title":"...","oneliner":"pitch","sections":[{"title":"NAME","content":"content"}]} 10 sections: Problem,Solution,Market Size,Business Model,Revenue Streams,Go-To-Market,Competitive Moat,Team Requirements,Financial Projections,Next Steps. Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
-  actionplan: { sys: `JSON only. Output MUST use correct English. {"title":"...","weeks":[{"week":"Week 1","focus":"goal","tasks":[{"task":"action","priority":"HIGH","outcome":"result"}]}]} Priority: HIGH MED or LOW. 4 weeks,4-5 tasks. Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
-  swot: { sys: `JSON only. Output MUST use correct English. {"title":"...","summary":"sentence","strengths":["...","...","...","..."],"weaknesses":["...","...","...","..."],"opportunities":["...","...","...","..."],"threats":["...","...","...","..."],"strategic_insight":"2-3 sentences"} Start { end }`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  mindmap: { sys: `You are a creative mind mapper. Create a detailed mind map in JSON format with these exact fields: {"center":"[ONE short phrase]","branches":[{"label":"[branch name]","color":"[vivid hex color]","nodes":[{"node":"[concept 1]","angle":0,"dist":60},{"node":"[concept 2]","angle":45,"dist":60},{"node":"[concept 3]","angle":90,"dist":60}]}]} Create 5-6 creative branches with vivid colors (#FF6B00, #C8FF00, #00D4FF, #FF3C78, #B87FFF, #00FFB2). Include 3 nodes per branch with angles and distances. Output ONLY the JSON object, no explanation.`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  blueprint: { sys: `You are a startup strategist. Create a detailed 7-section blueprint in JSON: {"title":"[idea name]","vision":"[2-3 sentence vision]","sections":[{"title":"[section name]","content":"[2-3 detailed sentences]","bullets":["specific bullet 1","specific bullet 2","specific bullet 3"]}]} Include ALL 7 sections with REAL content: Problem & Solution,Target Market,Unique Advantage,Revenue Model,Go-to-Market,Critical Risks,Success Metrics. Each section needs 3 real bullets. Output ONLY valid complete JSON.`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  roadmap: { sys: `You are a strategic planner. Create a detailed 4-phase roadmap in JSON: {"title":"[name] Roadmap","phases":[{"phase":"[Phase X]","title":"[phase name]","duration":"[specific weeks]","goal":"[clear goal]","milestones":["[specific milestone 1]","[specific milestone 2]","[specific milestone 3]","[specific milestone 4]"],"kpis":["[KPI 1]","[KPI 2]","[KPI 3]"]]} Create 4 phases: Foundation, Launch, Scale, Dominate. Each phase needs 3-4 specific milestones and 2-3 KPIs. Output ONLY valid complete JSON.`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  businessplan: { sys: `You are a business analyst. Create a comprehensive business plan in JSON: {"title":"[name]","oneliner":"[compelling one-liner]","sections":[{"title":"[section name]","content":"[detailed paragraph explaining this section]"}]} Include ALL 10 sections with DETAILED content: Problem,Solution,Market Size,Business Model,Revenue Streams,Go-To-Market,Competitive Moat,Team Requirements,Financial Projections,Next Steps. Output ONLY valid complete JSON.`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  actionplan: { sys: `You are an execution coach. Create a 4-week action plan in JSON: {"title":"[name] 30-Day Sprint","weeks":[{"week":"Week 1","focus":"[focus area]","tasks":[{"task":"[specific action]","outcome":"[expected result]","priority":"HIGH|MED|LOW"}]},{"week":"Week 2","focus":"[focus area]","tasks":[...]},{"week":"Week 3","focus":"[focus area]","tasks":[...]},{"week":"Week 4","focus":"[focus area]","tasks":[...]}]} Each week needs 3-4 specific tasks with priorities. Output ONLY valid complete JSON.`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
+  swot: { sys: `You are a strategic consultant. Create a SWOT analysis in JSON: {"title":"[name]","summary":"[3-4 sentence executive summary]","strengths":["[real strength 1]","[real strength 2]","[real strength 3]","[real strength 4]"],"weaknesses":["[real weakness 1]","[real weakness 2]","[real weakness 3]","[real weakness 4]"],"opportunities":["[real opportunity 1]","[real opportunity 2]","[real opportunity 3]","[real opportunity 4]"],"threats":["[real threat 1]","[real threat 2]","[real threat 3]","[real threat 4]"],"strategic_insight":"[2-3 sentence strategic recommendation]"} Output ONLY valid complete JSON.`, usr: (idea: string, ctx: string, p: unknown) => `${profileContext(p as any)}\n${marketContext(p as any)}\nIdea:"${idea}"\n${ctx}` },
 };
 
 const OUTPUTS = [
@@ -1278,6 +1353,7 @@ export default function App() {
   const [resultTab, setResultTab] = useState<string>("summary");
   const [skeletonFor, setSkeletonFor] = useState<string | null>(null);
   const [outputs, setOutputs] = useState<Record<string, any>>({});
+  const [streamChunk, setStreamChunk] = useState("");
   const [err, setErr] = useState("");
   const [hov, setHov] = useState<string | null>(null);
   const [intel, setIntel] = useState(false);
@@ -1409,10 +1485,27 @@ export default function App() {
     if (!force && outputs[type]) { setOutType(type); setResultTab("summary"); setPhase("output"); setSkeletonFor(null); return; }
     setOutType(type); setResultTab("summary"); setSkeletonFor(type); setPhase("generating"); setErr("");
     setLoadMsg(`Forging ${OUTPUTS.find(o => o.key === type)?.label}…`);
+    setStreamChunk(""); // Clear previous stream
     const cfg = CONFIGS[type];
     try {
-      const result = await ai(cfg.sys, cfg.usr(idea, ctxStr(qa), profile), true, 7000, 2);
+      // Use streaming to show live output
+      let full = "";
+      await aiStream(cfg.sys, cfg.usr(idea, ctxStr(qa), profile), (chunk) => {
+        full = chunk;
+        setStreamChunk(full);
+      }, 7000);
+      // Parse JSON result from the streamed text
+      let result: any;
+      const s = full.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+      const st = s.indexOf("{"), en = s.lastIndexOf("}");
+      if (st !== -1 && en !== -1) {
+        const jsonStr = s.slice(st, en + 1).replace(/,\s*([}\]])/g, "$1").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+        result = JSON.parse(jsonStr);
+      } else {
+        result = { title: idea, fallback: true };
+      }
       setOutputs(prev => ({ ...prev, [type]: result }));
+      setStreamChunk(""); // Clear stream on complete
       setSkeletonFor(null);
       setPhase("output");
     } catch (e: unknown) {
@@ -1442,6 +1535,7 @@ export default function App() {
   const resetIdea = () => {
     setPhase("ignition"); setIdea(""); setQa([]); setCurQ(""); setCurA("");
     setLoading(false); setOutType(null); setOutputs({}); setErr(""); setLoadMsg("");
+    setStreamChunk("");
     setIntel(false); setCompany(false); setIdeaScore(null); setCurrentIdeaId(null);
     prefetchRef.current = {};
   };
@@ -1512,8 +1606,8 @@ export default function App() {
       {showTools && !intel && <button className="fab" onClick={() => { setIntel(true); setCompany(false); }} style={{ position: "fixed", bottom: "7.5rem", right: "1.75rem", width: "52px", height: "52px", borderRadius: "50%", background: LIME, border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 999, transition: "all .2s", boxShadow: `0 4px 18px ${LIME}28`, animation: "glowPulse 3s ease infinite" }}><span style={{ fontSize: "19px", lineHeight: 1 }}>⚡</span><span style={{ fontSize: "0.34rem", color: "#000", fontFamily: "monospace", fontWeight: "900", marginTop: "1px", letterSpacing: "0.5px" }}>INTEL</span></button>}
       {showTools && <button className="fab2" onClick={() => { setCompany(true); setIntel(false); }} style={{ position: "fixed", bottom: "2rem", right: "1.75rem", width: "52px", height: "52px", borderRadius: "50%", background: PURPLE, border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 999, transition: "all .2s", boxShadow: `0 4px 18px ${PURPLE}28` }}><span style={{ fontSize: "19px", lineHeight: 1 }}>🏗</span><span style={{ fontSize: "0.34rem", color: "#fff", fontFamily: "monospace", fontWeight: "900", marginTop: "1px", letterSpacing: "0.5px" }}>BUILD</span></button>}
 
-      {intel && <IntelPanel idea={idea} profile={profile} onClose={() => setIntel(false)} />}
-      {company && <CompanyBuilder idea={idea} qaCtx={ctxStr(qa)} profile={profile} onClose={() => setCompany(false)} />}
+      {intel && <ErrorBoundary><IntelPanel idea={idea} profile={profile} onClose={() => setIntel(false)} /></ErrorBoundary>}
+      {company && <ErrorBoundary><CompanyBuilder idea={idea} qaCtx={ctxStr(qa)} profile={profile} onClose={() => setCompany(false)} /></ErrorBoundary>}
       {showProfile && <ProfilePanel profile={profile} user={user} onUpdate={p => setProfile(p)} onLogout={logout} onClose={() => setShowProfile(false)} />}
       {showHistory && user && <HistoryPanel uid={user.uid} onLoad={loadIdea} onClose={() => setShowHistory(false)} />}
       {showFeedback && <FeedbackPanel onClose={() => setShowFeedback(false)} />}
@@ -1680,21 +1774,21 @@ export default function App() {
 
         {/* GENERATING */}
         {phase === "generating" && (
-          <div style={{ textAlign: "center", padding: "6rem 0", animation: "fadeIn .3s ease" }}>
-            <div style={{ position: "relative", width: "64px", height: "64px", margin: "0 auto 1.8rem" }}>
-              {/* Outer orbit ring */}
-              <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${LIME}18`, animation: "spin 3s linear infinite", boxShadow: `0 0 30px ${LIME}10 inset` }} />
-              {/* Middle glow ring */}
-              <div style={{ position: "absolute", inset: "8px", borderRadius: "50%", border: `2px solid ${LIME}40`, animation: "spin 1.8s linear infinite reverse", boxShadow: `0 0 20px ${LIME}20` }} />
-              {/* Inner core */}
-              <div style={{ position: "absolute", inset: "20px", borderRadius: "50%", background: `radial-gradient(circle, ${LIME}30, transparent)`, animation: "glowPulse 2s ease infinite" }} />
-              {/* Center dot */}
-              <div style={{ position: "absolute", inset: "26px", borderRadius: "50%", background: LIME, boxShadow: `0 0 16px ${LIME}`, animation: "pulse 1.5s ease infinite" }} />
+          <div style={{ animation: "fadeIn .3s ease" }}>
+            <div style={{ textAlign: "center", padding: "2rem 0 1.5rem" }}>
+              <div style={{ position: "relative", width: "64px", height: "64px", margin: "0 auto 1.8rem" }}>
+                <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${LIME}18`, animation: "spin 3s linear infinite", boxShadow: `0 0 30px ${LIME}10 inset` }} />
+                <div style={{ position: "absolute", inset: "8px", borderRadius: "50%", border: `2px solid ${LIME}40`, animation: "spin 1.8s linear infinite reverse", boxShadow: `0 0 20px ${LIME}20` }} />
+                <div style={{ position: "absolute", inset: "20px", borderRadius: "50%", background: `radial-gradient(circle, ${LIME}30, transparent)`, animation: "glowPulse 2s ease infinite" }} />
+                <div style={{ position: "absolute", inset: "26px", borderRadius: "50%", background: LIME, boxShadow: `0 0 16px ${LIME}`, animation: "pulse 1.5s ease infinite" }} />
+              </div>
+              <p style={{ color: LIME, fontSize: "0.62rem", letterSpacing: "5px", margin: "0 0 0.5rem", textShadow: "0 0 20px rgba(200,255,0,0.5)", fontWeight: 700 }}>FORGING</p>
+              <p style={{ color: TEXT_MUTED, fontSize: "0.72rem" }}>{loadMsg}</p>
             </div>
-            <p style={{ color: LIME, fontSize: "0.62rem", letterSpacing: "5px", margin: "0 0 0.5rem", textShadow: "0 0 20px rgba(200,255,0,0.5)", fontWeight: 700 }}>FORGING</p>
-            <p style={{ color: TEXT_MUTED, fontSize: "0.72rem" }}>{loadMsg}</p>
-            <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "1.2rem" }}>
-              {[0,1,2].map(i => <div key={i} style={{ width: "4px", height: "4px", borderRadius: "50%", background: LIME, opacity: 0.4, animation: `pulse 1.2s ease ${i * .2}s infinite` }} />)}
+            {/* Streaming output box */}
+            <div style={{ background: "var(--bg-card)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: `1px solid ${LIME}20`, borderRadius: RAD.lg, padding: $.cardPad, marginTop: "0.5rem", maxHeight: "420px", overflowY: "auto" }}>
+              <div style={{ color: LIME, fontSize: FS.xs, letterSpacing: "3px", marginBottom: "0.8rem", opacity: 0.7 }}>STREAMING OUTPUT</div>
+              <Md text={streamChunk} />
             </div>
           </div>
         )}
@@ -1841,12 +1935,12 @@ export default function App() {
               {skeletonFor === "businessplan" && <BusinessPlanSkeleton />}
               {skeletonFor === "actionplan" && <ActionPlanSkeleton />}
               {skeletonFor === "swot" && <SWOTSkeleton />}
-              {!skeletonFor && outType === "mindmap" && <MindMap data={outputs[outType]} />}
-              {!skeletonFor && outType === "blueprint" && <Blueprint data={outputs[outType]} />}
-              {!skeletonFor && outType === "roadmap" && <Roadmap data={outputs[outType]} />}
-              {!skeletonFor && outType === "businessplan" && <BusinessPlan data={outputs[outType]} />}
-              {!skeletonFor && outType === "actionplan" && <ActionPlan data={outputs[outType]} />}
-              {!skeletonFor && outType === "swot" && <SWOT data={outputs[outType]} />}
+              {!skeletonFor && outType === "mindmap" && <ErrorBoundary><MindMap data={outputs[outType]} /></ErrorBoundary>}
+              {!skeletonFor && outType === "blueprint" && <ErrorBoundary><Blueprint data={outputs[outType]} /></ErrorBoundary>}
+              {!skeletonFor && outType === "roadmap" && <ErrorBoundary><Roadmap data={outputs[outType]} /></ErrorBoundary>}
+              {!skeletonFor && outType === "businessplan" && <ErrorBoundary><BusinessPlan data={outputs[outType]} /></ErrorBoundary>}
+              {!skeletonFor && outType === "actionplan" && <ErrorBoundary><ActionPlan data={outputs[outType]} /></ErrorBoundary>}
+              {!skeletonFor && outType === "swot" && <ErrorBoundary><SWOT data={outputs[outType]} /></ErrorBoundary>}
             </div>
           </div>
         )}
