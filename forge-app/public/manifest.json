@@ -1,0 +1,21 @@
+{
+  "name": "FORGE - Idea Engine for Founders",
+  "short_name": "FORGE",
+  "description": "Transform your raw idea into a fundable business with AI-powered insights",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0F",
+  "theme_color": "#C8FF00",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "lang": "en",
+  "dir": "ltr"
+}

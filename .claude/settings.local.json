@@ -4,7 +4,8 @@
       "Bash(npm create vite@latest . -- --template react)",
       "Bash(npm create vite@latest forge-app -- --template react)",
       "Bash(npm install)",
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "Bash(npm install @sentry/react)"
     ]
   }
 }

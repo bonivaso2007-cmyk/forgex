@@ -1,5 +1,16 @@
 /// <reference types="vite/client" />
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import * as Sentry from "@sentry/react";
+
+// Initialize Sentry in production only
+if (!import.meta.env.DEV) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN || "",
+    environment: import.meta.env.MODE || "production",
+    integrations: [Sentry.browserTracingIntegration()],
+    tracesSampleRate: 0.1,
+  });
+}
 
 // ── TYPES ──────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,17 +156,21 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3): P
 
 // ── MULTI-MODEL API (cascade with fallback) ──────────────
 // Keys from .env — NEVER commit to git
+// In production, keys are hidden via Netlify proxy
 const KEYS = {
   gemini: import.meta.env.VITE_GEMINI_API_KEY || "",
   groq: GROQ_API_KEY,
   deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY || "",
 };
 
-// Models ranked by quality for different tasks
+// Use proxy in production to hide API keys
+const PROXY_URL = import.meta.env.DEV ? "" : "/api/ai";
+
+// Models ranked by quality for different tasks (direct URLs - fallback if proxy fails)
 const MODELS = {
-  quick: { name: "llama-3.3-70b-versatile", provider: "groq", key: KEYS.groq, url: "https://api.groq.com/openai/v1/chat/completions" },
-  smart: { name: "gemini-2.0-flash", provider: "gemini", key: KEYS.gemini, url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent" },
-  deep: { name: "deepseek-chat", provider: "deepseek", key: KEYS.deepseek, url: "https://api.deepseek.com/v1/chat/completions" },
+  quick: { name: "llama-3.3-70b-versatile", provider: "groq", url: "https://api.groq.com/openai/v1/chat/completions" },
+  smart: { name: "gemini-2.0-flash", provider: "gemini", url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent" },
+  deep: { name: "deepseek-chat", provider: "deepseek", url: "https://api.deepseek.com/v1/chat/completions" },
 };
 
 // Smart model selection based on task
@@ -223,13 +238,57 @@ async function aiStreamRaw(provider: string, url: string, key: string, model: st
   return full;
 }
 
+// Use proxy in production to hide API keys from browser bundle
 async function aiStream(system: string, user: string, onChunk: (chunk: string) => void, maxTok = 7000) {
+  // Production: use serverless proxy (keys stay server-side)
+  if (!import.meta.env.DEV && PROXY_URL) {
+    try {
+      const res = await fetch(PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: pickModel(maxTok).provider,
+          model: pickModel(maxTok).name,
+          system,
+          user,
+          maxTokens: maxTok,
+        }),
+      });
+      if (!res.ok) throw new Error(`Proxy ${res.status}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      // Non-streaming - show all at once
+      onChunk(data.content || "");
+      return data.content || "";
+    } catch (e) {
+      console.warn("Proxy failed, falling back to direct:", e);
+      // Fall through to direct call
+    }
+  }
+
+  // Development: direct API calls (streaming)
   const primary = pickModel(maxTok);
+  const key = KEYS[primary.provider as keyof typeof KEYS];
   try {
-    return await aiStreamRaw(primary.provider, primary.url, primary.key, primary.name, system, user, onChunk, maxTok);
+    return await aiStreamRaw(primary.provider, primary.url, key, primary.name, system, user, onChunk, maxTok);
   } catch (e) {
     console.warn(`${primary.provider} failed, falling back to Groq:`, e);
     // Fallback to Groq (most reliable free tier)
+    if (primary.provider !== "groq" && KEYS.groq) {
+      return await aiStreamRaw("groq", MODELS.quick.url, KEYS.groq, MODELS.quick.name, system, user, onChunk, maxTok);
+    }
+    throw e;
+  }
+}
+
+// Direct streaming fallback (used when proxy unavailable)
+async function aiStreamDirect(system: string, user: string, onChunk: (chunk: string) => void, maxTok = 7000) {
+  const primary = pickModel(maxTok);
+  const key = KEYS[primary.provider as keyof typeof KEYS];
+  try {
+    return await aiStreamRaw(primary.provider, primary.url, key, primary.name, system, user, onChunk, maxTok);
+  } catch (e) {
+    // Fallback to Groq
     if (primary.provider !== "groq" && KEYS.groq) {
       return await aiStreamRaw("groq", MODELS.quick.url, KEYS.groq, MODELS.quick.name, system, user, onChunk, maxTok);
     }
@@ -1338,7 +1397,7 @@ const ctxStr = (pairs: {question: string; answer: string}[]) => pairs.map((x, i)
 const FREE_IDEA_LIMIT = 3;
 
 // ── MAIN APP ──────────────────────────────────────────────
-export default function App() {
+function App() {
   const [appState, setAppState] = useState<"loading"|"guest"|"auth"|"onboarding"|"app">("loading");
   const [user, setUser] = useState<{uid: string; name?: string; avatar?: string} | null>(null);
   const [profile, setProfile] = useState<{name: string; title: string; market: string; [key: string]: any} | null>(null);
@@ -1950,3 +2009,5 @@ export default function App() {
     </div>
   );
 }
+
+export default App;
